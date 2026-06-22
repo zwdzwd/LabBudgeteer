@@ -5,22 +5,72 @@ interface EventEditorProps {
   onToggle: () => void
 }
 
-function formatEventLine(event: any, idx: number): string {
-  const parts = [
-    `${idx + 1}.`,
-    event.month,
-    event.type,
-  ]
+function getTooltipText(event: any): string {
+  const lines = []
+  for (const [key, value] of Object.entries(event)) {
+    if (value === undefined || value === null || value === '') continue
+    lines.push(`${key}: ${value}`)
+  }
+  return lines.join('\n')
+}
 
-  if (event.grantId) parts.push(`grant:${event.grantId}`)
-  if (event.personId) parts.push(`person:${event.personId}`)
-  if (event.name) parts.push(`"${event.name}"`)
-  if (event.amount) parts.push(`amount:${event.amount}`)
-  if (event.effort) parts.push(`effort:${event.effort}%`)
-  if (event.annualSalary) parts.push(`salary:$${event.annualSalary}`)
-  if (event.description) parts.push(`— ${event.description}`)
+function EventLine({ event }: { event: any }) {
+  const type = event.type || 'unknown'
+  const month = event.month || '—'
+  const tooltip = getTooltipText(event)
 
-  return parts.join(' ')
+  return (
+    <div
+      title={tooltip}
+      className="text-slate-700 hover:bg-slate-50 px-2 py-1 rounded cursor-help text-xs leading-relaxed"
+    >
+      <span className="font-bold text-slate-900">{month}</span>
+      {' '}
+      <span className="font-semibold text-blue-600">{type}</span>
+      {event.grantId && (
+        <>
+          {' '}
+          <span className="underline text-slate-700">{event.grantId}</span>
+        </>
+      )}
+      {event.personId && (
+        <>
+          {' '}
+          <span className="italic text-slate-600">{event.personId}</span>
+        </>
+      )}
+      {event.name && (
+        <>
+          {' '}
+          <span className="text-slate-800">"{event.name}"</span>
+        </>
+      )}
+      {event.amount && (
+        <>
+          {' '}
+          <span className="text-green-700 font-medium">{event.amount}</span>
+        </>
+      )}
+      {event.effort && (
+        <>
+          {' '}
+          <span className="text-orange-700 font-medium">{event.effort}%</span>
+        </>
+      )}
+      {event.annualSalary && (
+        <>
+          {' '}
+          <span className="text-green-700 font-medium">${event.annualSalary.toLocaleString()}</span>
+        </>
+      )}
+      {event.description && (
+        <>
+          {' '}
+          <span className="text-slate-500">— {event.description}</span>
+        </>
+      )}
+    </div>
+  )
 }
 
 export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
@@ -30,7 +80,7 @@ export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
     <>
       {/* Slide-out Panel */}
       <div
-        className={`fixed left-0 top-0 h-screen w-full max-w-2xl bg-white shadow-2xl transform transition-transform duration-300 z-[85] overflow-y-auto ${
+        className={`fixed left-0 top-0 h-screen w-full max-w-3xl bg-white shadow-2xl transform transition-transform duration-300 z-[85] overflow-y-auto ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -52,14 +102,9 @@ export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
           {rawEvents.length === 0 ? (
             <p className="text-xs text-slate-500">No events loaded</p>
           ) : (
-            <div className="space-y-1 font-mono text-xs">
+            <div className="space-y-0 font-mono">
               {rawEvents.map((event, idx) => (
-                <div
-                  key={idx}
-                  className="text-slate-700 hover:bg-slate-50 px-2 py-1 rounded"
-                >
-                  {formatEventLine(event, idx)}
-                </div>
+                <EventLine key={idx} event={event} />
               ))}
             </div>
           )}
