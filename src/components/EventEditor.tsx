@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStore } from '../store/useStore'
 
 interface EventEditorProps {
@@ -5,24 +6,51 @@ interface EventEditorProps {
   onToggle: () => void
 }
 
-function getTooltipText(event: any): string {
-  const lines = []
-  for (const [key, value] of Object.entries(event)) {
+function getTooltipLines(event: any): Array<[string, string]> {
+  const lines: Array<[string, string]> = []
+  const order = ['month', 'type', 'grantId', 'personId', 'name', 'effort', 'amount', 'annualSalary', 'startMonth', 'endMonth', 'accountType', 'description']
+
+  for (const key of order) {
+    const value = event[key]
     if (value === undefined || value === null || value === '') continue
-    lines.push(`${key}: ${value}`)
+    lines.push([key, String(value)])
   }
-  return lines.join('\n')
+
+  // Add remaining keys not in order
+  for (const [key, value] of Object.entries(event)) {
+    if (!order.includes(key) && value !== undefined && value !== null && value !== '') {
+      lines.push([key, String(value)])
+    }
+  }
+
+  return lines
+}
+
+function EventTooltip({ event }: { event: any }) {
+  const lines = getTooltipLines(event)
+
+  return (
+    <div className="bg-slate-900/95 text-white rounded-lg p-3 shadow-xl border border-slate-700 space-y-1.5 text-xs max-w-sm">
+      {lines.map(([key, value], idx) => (
+        <div key={idx} className="flex gap-2">
+          <span className="font-semibold text-blue-300 min-w-24">{key}:</span>
+          <span className="text-slate-100 break-words">{value}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function EventLine({ event }: { event: any }) {
+  const [showTooltip, setShowTooltip] = useState(false)
   const type = event.type || 'unknown'
   const month = event.month || '—'
-  const tooltip = getTooltipText(event)
 
   return (
     <div
-      title={tooltip}
-      className="text-slate-700 hover:bg-slate-50 px-2 py-1 rounded cursor-help text-xs leading-relaxed"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+      className="relative group text-slate-700 hover:bg-slate-50 px-2 py-1 rounded text-xs leading-relaxed"
     >
       <span className="font-bold text-slate-900">{month}</span>
       {' '}
@@ -68,6 +96,13 @@ function EventLine({ event }: { event: any }) {
           {' '}
           <span className="text-slate-500">— {event.description}</span>
         </>
+      )}
+
+      {/* Custom Tooltip */}
+      {showTooltip && (
+        <div className="absolute left-0 top-full mt-1 z-50 pointer-events-none">
+          <EventTooltip event={event} />
+        </div>
       )}
     </div>
   )
