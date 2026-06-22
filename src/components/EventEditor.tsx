@@ -5,79 +5,22 @@ interface EventEditorProps {
   onToggle: () => void
 }
 
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  start_grant: 'bg-blue-100 border-blue-300',
-  end_grant: 'bg-red-100 border-red-300',
-  grant_renew: 'bg-purple-100 border-purple-300',
-  cover_person: 'bg-green-100 border-green-300',
-  salary_rate: 'bg-yellow-100 border-yellow-300',
-  terminate_personnel: 'bg-orange-100 border-orange-300',
-  one_off_expenditure: 'bg-pink-100 border-pink-300',
-}
+function formatEventLine(event: any, idx: number): string {
+  const parts = [
+    `${idx + 1}.`,
+    event.month,
+    event.type,
+  ]
 
-const EVENT_TYPE_ICONS: Record<string, string> = {
-  start_grant: '📊',
-  end_grant: '🔚',
-  grant_renew: '🔄',
-  cover_person: '👤',
-  salary_rate: '💰',
-  terminate_personnel: '🚪',
-  one_off_expenditure: '💸',
-}
+  if (event.grantId) parts.push(`grant:${event.grantId}`)
+  if (event.personId) parts.push(`person:${event.personId}`)
+  if (event.name) parts.push(`"${event.name}"`)
+  if (event.amount) parts.push(`amount:${event.amount}`)
+  if (event.effort) parts.push(`effort:${event.effort}%`)
+  if (event.annualSalary) parts.push(`salary:$${event.annualSalary}`)
+  if (event.description) parts.push(`— ${event.description}`)
 
-function getRelevantFields(event: any): Record<string, any> {
-  const type = event.type
-  const fields: Record<string, any> = {}
-
-  // Common fields
-  if (event.name) fields.name = event.name
-  if (event.description) fields.description = event.description
-
-  // Type-specific fields
-  switch (type) {
-    case 'start_grant':
-      if (event.grantId) fields.grantId = event.grantId
-      if (event.accountType) fields.accountType = event.accountType
-      if (event.endMonth) fields.endMonth = event.endMonth
-      if (event.budget) fields.budget = event.budget
-      if (event.nextReportMonth) fields.nextReportMonth = event.nextReportMonth
-      break
-
-    case 'end_grant':
-      if (event.grantId) fields.grantId = event.grantId
-      break
-
-    case 'grant_renew':
-      if (event.grantId) fields.grantId = event.grantId
-      if (event.amount) fields.amount = event.amount
-      if (event.nextReportMonth) fields.nextReportMonth = event.nextReportMonth
-      break
-
-    case 'cover_person':
-      if (event.grantId) fields.grantId = event.grantId
-      if (event.personId) fields.personId = event.personId
-      if (event.effort) fields.effort = `${event.effort}%`
-      if (event.startMonth) fields.startMonth = event.startMonth
-      if (event.endMonth) fields.endMonth = event.endMonth
-      if (event.capAtTotal) fields.capAtTotal = `${event.capAtTotal}%`
-      break
-
-    case 'salary_rate':
-      if (event.personId) fields.personId = event.personId
-      if (event.annualSalary) fields.annualSalary = `$${event.annualSalary.toLocaleString()}`
-      break
-
-    case 'terminate_personnel':
-      if (event.personId) fields.personId = event.personId
-      break
-
-    case 'one_off_expenditure':
-      if (event.grantId) fields.grantId = event.grantId
-      if (event.amount) fields.amount = event.amount
-      break
-  }
-
-  return fields
+  return parts.join(' ')
 }
 
 export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
@@ -92,30 +35,33 @@ export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
         }`}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold">Events</h2>
-            <p className="text-sm text-slate-300 mt-1">{rawEvents.length} event{rawEvents.length !== 1 ? 's' : ''}</p>
-          </div>
+        <div className="sticky top-0 bg-slate-100 border-b p-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Events ({rawEvents.length})
+          </h2>
           <button
             onClick={onToggle}
-            className="text-white hover:text-slate-300 text-2xl leading-none"
+            className="text-slate-600 hover:text-slate-900 text-xl leading-none"
           >
             ✕
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-3">
+        <div className="p-3">
           {rawEvents.length === 0 ? (
-            <div className="text-gray-500 text-center py-12">
-              <p className="text-lg font-medium mb-2">No events loaded</p>
-              <p className="text-sm">Open a .txt file to view events</p>
-            </div>
+            <p className="text-xs text-slate-500">No events loaded</p>
           ) : (
-            rawEvents.map((event, idx) => (
-              <EventCard key={idx} event={event} idx={idx} />
-            ))
+            <div className="space-y-1 font-mono text-xs">
+              {rawEvents.map((event, idx) => (
+                <div
+                  key={idx}
+                  className="text-slate-700 hover:bg-slate-50 px-2 py-1 rounded"
+                >
+                  {formatEventLine(event, idx)}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -128,54 +74,5 @@ export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
         />
       )}
     </>
-  )
-}
-
-function EventCard({ event, idx }: { event: any; idx: number }) {
-  const type = event.type
-  const colors = EVENT_TYPE_COLORS[type] || 'bg-gray-100 border-gray-300'
-  const icon = EVENT_TYPE_ICONS[type] || '📋'
-  const fields = getRelevantFields(event)
-
-  return (
-    <div className={`p-4 rounded-lg border-2 ${colors} transition-all hover:shadow-md`}>
-      {/* Header with icon and type */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">{icon}</span>
-        <div>
-          <div className="font-mono text-sm font-bold text-gray-900">
-            {event.month}
-          </div>
-          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-            {type.replace(/_/g, ' ')}
-          </div>
-        </div>
-      </div>
-
-      {/* Fields Grid */}
-      <div className="space-y-2">
-        {Object.entries(fields).map(([key, value]) => {
-          const displayKey = key.replace(/([A-Z])/g, ' $1').trim()
-          return (
-            <div
-              key={key}
-              className="flex justify-between items-start gap-3 text-sm"
-            >
-              <span className="font-medium text-gray-700 min-w-max">
-                {displayKey}:
-              </span>
-              <span className="text-gray-900 text-right break-words max-w-xs">
-                {typeof value === 'string' ? value : JSON.stringify(value)}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Index badge */}
-      <div className="mt-3 text-xs text-gray-600 opacity-60">
-        Event #{idx + 1}
-      </div>
-    </div>
   )
 }
