@@ -46,11 +46,13 @@ export type Expense = {
 
 // A balance reset establishes a grant's ending balance for a month-end checkpoint.
 // Charges begin in the following month.
+// operation: 'reset' sets balance to amount; 'add'/'subtract' adjusts the current balance.
 export type BalanceReset = {
   id: string
   grantId: string
   month: string // "YYYY-MM"
   amount: number
+  operation: 'reset' | 'add' | 'subtract' // defaults to 'reset' for backwards compat
   description?: string
 }
 
@@ -70,7 +72,7 @@ export type Settings = {
   endMonth?: string // "YYYY-MM"
 }
 
-export const SCHEMA_VERSION = 8
+export const SCHEMA_VERSION = 9
 
 export type AppData = {
   schemaVersion: number

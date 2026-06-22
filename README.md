@@ -31,79 +31,78 @@ watched continuously by the page.
 Events must be listed in chronological order — they are compiled in file order, so a later
 `cover_person` can re-add effort that an earlier `terminate_personnel` removed.
 
+### Event Types
+
+- **`start_grant`** — Create a grant with optional budget and report schedule.
+- **`grant_renew`** — Update grant metadata, set/adjust balance, and/or update report month. Use `amount: "1000"` (no sign) to reset balance to 1000, `amount: "+1000"` to add 1000, or `amount: "-1000"` to subtract 1000.
+- **`end_grant`** — Mark grant as ended; terminates allocations after this month.
+- **`cover_person`** — Allocate a person's monthly effort (0–100%) to a grant over a date range. Use `capAtTotal: 100` to cap total effort across all grants.
+- **`salary_rate`** — Set a person's annual salary effective from this month.
+- **`terminate_personnel`** — End a person's employment; removes effort allocations after this month.
+- **`one_off_expenditure`** — Record a non-salary cost or supplement (negative amount). Applied each month listed.
+
 Data shape:
 
 ```yaml
-schemaVersion: 8
+schemaVersion: 9
 settings:
   startMonth: 2024-09
   endMonth: 2031-05
 
 events:
-  - month: 2025-07
+  - month: 2024-10
     type: salary_rate
-    personId: wz
-    name: Wanding Zhou
+    personId: person-a
+    name: Person A
     annualSalary: 160000
 
-  - month: 2025-08
+  - month: 2024-09
     type: start_grant
-    grantId: r35
-    name: R35 / GRT-00002468
+    grantId: grant-1
+    name: Example Grant
     accountType: regular
-    nextReportMonth: 2026-08
-    info: Annual RPPR due before renewal.
-    endMonth: 2027-08
-    budget: 26788
-    budgetStartMonth: 2025-08
-
-  - month: 2025-08
-    type: grant_update
-    grantId: r35
-    nextReportMonth: 2027-08
-    info: Updated report date after annual renewal.
-
-  - month: 2025-08
-    type: cover_person
-    grantId: r35
-    personId: hf
-    name: Hongxiang Fu
-    effort: 80
-    startMonth: 2025-08
-    endMonth: 2025-11
+    nextReportMonth: 2025-09
+    info: Annual report due before renewal.
+    endMonth: 2026-09
+    budget: 50000
+    budgetStartMonth: 2024-09
 
   - month: 2024-09
     type: cover_person
-    grantId: r35
-    personId: wz
-    name: Wanding Zhou
-    effort: 51
-    capAtTotal: 100
+    grantId: grant-1
+    personId: person-a
+    name: Person A
+    effort: 50
     startMonth: 2024-09
-    endMonth: 2027-08
+    endMonth: 2026-09
+
+  - month: 2025-03
+    type: one_off_expenditure
+    grantId: grant-1
+    amount: 5000
+    description: Equipment purchase
+
+  - month: 2025-09
+    type: grant_renew
+    grantId: grant-1
+    nextReportMonth: 2026-09
+    info: Report date updated after renewal.
 
   - month: 2026-04
-    type: one_off_expenditure
-    grantId: r35
-    amount: 3330
-    description: CCR APC
-
-  - month: 2026-06
-    type: reset_balance
-    grantId: professional-fund
-    amount: 4000
-    description: Annual reset to 4000
+    type: grant_renew
+    grantId: grant-1
+    amount: "-50000"
+    description: Annual award installment
 ```
 
-`accountType` groups snapshot cards and can be `flexible`, `regular`, or `supplemental`.
-`nextReportMonth` is shown on the compact snapshot card. `info` is optional free text shown in
-the snapshot tooltip. Use `grant_update` to revise report metadata after annual renewal.
-`budgetStartMonth` means the month whose ending balance is entered. For example, if a grant
-period starts on August 1 and the balance is known as of July 31, use July as the
-`budgetStartMonth`; charges start in the following month. Negative one-off expenditures are
-award supplements or installments. `reset_balance` re-establishes the month-end balance for a
-grant cycle without treating it as spend. `capAtTotal` on `cover_person` caps that grant's
-monthly effort after all other grant coverage for the person has been applied.
+### Field Notes
+
+- `accountType` can be `flexible`, `regular`, or `supplemental`; groups snapshot cards.
+- `nextReportMonth` appears on snapshot cards. `info` is optional free text in tooltips.
+- `budgetStartMonth` is the month whose ending balance is known (e.g., if a grant runs Aug 1 – Jul 31 and the ending balance on Jul 31 is known, use July as `budgetStartMonth`). Salary charges begin the following month.
+- `grant_renew` can update any grant field (`sponsor`, `accountType`, `info`, etc.) and/or adjust balance: amount with no sign resets the balance, `+` adds, `-` subtracts.
+- `one_off_expenditure` with negative `amount` is a supplement or award installment.
+- `capAtTotal` on `cover_person` caps that person's effort on that grant after all other grants are allocated (enforces a total cap).
 
 ## Privacy
 

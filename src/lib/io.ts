@@ -82,14 +82,17 @@ const coverPersonEventSchema = personRef.extend({
   annualSalary: z.number().optional(),
 })
 
-const grantUpdateEventSchema = grantRef.extend({
-  type: z.literal('grant_update'),
+const grantRenewEventSchema = grantRef.extend({
+  type: z.literal('grant_renew'),
   month,
   name: z.string().optional(),
   sponsor: z.string().optional(),
   accountType: accountType.optional(),
   nextReportMonth: month.optional(),
   info: z.string().optional(),
+  amount: z.string().optional(), // "1000" (reset), "+1000" (add), "-1000" (subtract)
+  renewalId: z.string().optional(),
+  description: z.string().optional(),
 })
 
 const terminatePersonnelEventSchema = personRef.extend({
@@ -105,14 +108,6 @@ const oneOffExpenditureEventSchema = grantRef.extend({
   description: z.string().optional(),
 })
 
-const resetBalanceEventSchema = grantRef.extend({
-  type: z.literal('reset_balance'),
-  month,
-  resetId: z.string().optional(),
-  amount: z.number(),
-  description: z.string().optional(),
-})
-
 const endGrantEventSchema = grantRef.extend({
   type: z.literal('end_grant'),
   month,
@@ -121,11 +116,10 @@ const endGrantEventSchema = grantRef.extend({
 const eventSchema = z.discriminatedUnion('type', [
   salaryRateEventSchema,
   startGrantEventSchema,
-  grantUpdateEventSchema,
+  grantRenewEventSchema,
   coverPersonEventSchema,
   terminatePersonnelEventSchema,
   oneOffExpenditureEventSchema,
-  resetBalanceEventSchema,
   endGrantEventSchema,
 ])
 
@@ -215,10 +209,11 @@ function compileEvents(file: EventFile): AppData {
       continue
     }
 
-    if (event.type === 'grant_update') {
+    if (event.type === 'grant_renew') {
       const grantId = resolveGrantId(grants, grantNameToId, event)
       const grant = grants.get(grantId)
-      if (!grant) throw new Error(`Unknown grant in update event: ${grantId}.`)
+      if (!grant) throw new Error(`Unknown grant in renew event: ${grantId}.`)
+
       const updated: Grant = {
         ...grant,
         name: event.name ?? grant.name,
@@ -232,6 +227,31 @@ function compileEvents(file: EventFile): AppData {
       }
       grants.set(grantId, updated)
       if (event.name) grantNameToId.set(event.name, grantId)
+
+      if (event.amount) {
+        const amountStr = event.amount.trim()
+        let operation: 'reset' | 'add' | 'subtract' = 'reset'
+        let numAmount = parseFloat(amountStr)
+
+        if (amountStr.startsWith('+')) {
+          operation = 'add'
+          numAmount = parseFloat(amountStr.slice(1))
+        } else if (amountStr.startsWith('-')) {
+          operation = 'subtract'
+          numAmount = parseFloat(amountStr.slice(1))
+        }
+
+        if (Number.isFinite(numAmount)) {
+          balanceResets.push({
+            id: event.renewalId ?? `renewal-${String(balanceResets.length + 1).padStart(3, '0')}`,
+            grantId,
+            month: event.month,
+            amount: numAmount,
+            operation,
+            description: event.description,
+          })
+        }
+      }
       continue
     }
 
@@ -291,18 +311,6 @@ function compileEvents(file: EventFile): AppData {
       const grantId = resolveGrantId(grants, grantNameToId, event)
       expenses.push({
         id: event.expenseId ?? `expense-${String(expenses.length + 1).padStart(3, '0')}`,
-        grantId,
-        month: event.month,
-        amount: event.amount,
-        description: event.description,
-      })
-      continue
-    }
-
-    if (event.type === 'reset_balance') {
-      const grantId = resolveGrantId(grants, grantNameToId, event)
-      balanceResets.push({
-        id: event.resetId ?? `reset-${String(balanceResets.length + 1).padStart(3, '0')}`,
         grantId,
         month: event.month,
         amount: event.amount,

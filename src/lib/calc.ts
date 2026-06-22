@@ -97,24 +97,31 @@ export function grantBalanceSeries(
   const months = monthRange(start, end)
   let remaining = grant.budget as number
   const out: MonthBalance[] = []
-  const resetsByMonth = new Map<string, number>()
+  const resetsByMonth = new Map<string, BalanceReset>()
   for (const reset of balanceResets) {
     if (reset.grantId !== grant.id) continue
-    resetsByMonth.set(reset.month, reset.amount)
+    resetsByMonth.set(reset.month, reset)
   }
   months.forEach((m, i) => {
-    const reset = resetsByMonth.get(m)
-    if (typeof reset === 'number') {
-      remaining = reset
+    const resetEntry = resetsByMonth.get(m)
+    if (resetEntry) {
+      const op = resetEntry.operation
+      if (op === 'reset') {
+        remaining = resetEntry.amount
+      } else if (op === 'add') {
+        remaining += resetEntry.amount
+      } else if (op === 'subtract') {
+        remaining -= resetEntry.amount
+      }
     }
     // The budget is the ending balance for the baseline month, so burn-down
     // begins the following month.
     if (i === 0) {
-      out.push({ month: m, salary: 0, expense: 0, reset: reset ?? 0, spend: 0, remaining })
+      out.push({ month: m, salary: 0, expense: 0, reset: resetEntry?.amount ?? 0, spend: 0, remaining })
       return
     }
-    if (typeof reset === 'number') {
-      out.push({ month: m, salary: 0, expense: 0, reset, spend: 0, remaining })
+    if (resetEntry) {
+      out.push({ month: m, salary: 0, expense: 0, reset: resetEntry.amount, spend: 0, remaining })
       return
     }
     const salary = grantSalaryCharge(grant, m, allocations, peopleById, salaryRates)
