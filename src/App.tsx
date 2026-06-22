@@ -1,30 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useStore } from './store/useStore'
-import { parseImportedYAML } from './lib/io'
+import { parseImportedYAML, parseImportedTXTWithEvents } from './lib/io'
 import { Dashboard } from './pages/Dashboard'
+import { EventEditor } from './components/EventEditor'
 
-const DEFAULT_SOURCE = `${import.meta.env.BASE_URL}budget_events.yaml`
+const DEFAULT_SOURCE = `${import.meta.env.BASE_URL}budget_events.txt`
 
-// Read-only simulator seed. Provide your own public/budget_events.yaml (gitignored);
+// Read-only simulator seed. Provide your own public/budget_events.txt (gitignored);
 // in local development it is typically a symlink to your canonical event file.
 async function loadDefaultBudgetEvents(): Promise<string> {
   const res = await fetch(DEFAULT_SOURCE, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`Could not load budget_events.yaml (${res.status}).`)
+  if (!res.ok) throw new Error(`Could not load budget_events.txt (${res.status}).`)
   return res.text()
 }
 
-function applyBudgetEvents(text: string): void {
-  useStore.getState().replaceAll(parseImportedYAML(text))
+function applyBudgetEvents(text: string, filename: string): void {
+  const ext = filename.toLowerCase().split('.').pop()
+  let appData
+  let rawEvents: Record<string, any>[] = []
+
+  if (ext === 'txt') {
+    const result = parseImportedTXTWithEvents(text)
+    appData = result.appData
+    rawEvents = result.events
+  } else {
+    // For YAML, we don't track raw events yet
+    appData = parseImportedYAML(text)
+  }
+
+  useStore.getState().replaceAll(appData, rawEvents)
 }
 
 export default function App() {
-  const [sourceName, setSourceName] = useState('public/budget_events.yaml')
-  const [status, setStatus] = useState('Loading default YAML...')
+  const [sourceName, setSourceName] = useState('public/budget_events.txt')
+  const [status, setStatus] = useState('Loading...')
   const [error, setError] = useState<string | null>(null)
   const [watchEnabled, setWatchEnabled] = useState(true)
   const [hasFileHandle, setHasFileHandle] = useState(false)
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const fileHandleRef = useRef<FileSystemFileHandle | null>(null)
   const fileSignatureRef = useRef<string | null>(null)
@@ -32,7 +47,7 @@ export default function App() {
   async function loadText(label: string, readText: () => Promise<string>): Promise<void> {
     try {
       const text = await readText()
-      applyBudgetEvents(text)
+      applyBudgetEvents(text, label)
       setSourceName(label)
       setStatus('Loaded')
       setError(null)
@@ -40,14 +55,14 @@ export default function App() {
     } catch (e) {
       console.error(e)
       setStatus('Load failed')
-      setError(e instanceof Error ? e.message : 'Could not load YAML.')
+      setError(e instanceof Error ? e.message : 'Could not load file.')
     }
   }
 
   async function loadSelectedFile(handle: FileSystemFileHandle): Promise<void> {
     const file = await handle.getFile()
     const text = await file.text()
-    applyBudgetEvents(text)
+    applyBudgetEvents(text, file.name)
     fileSignatureRef.current = fileSignature(file)
     setSourceName(handle.name)
     setStatus('Loaded')
@@ -62,10 +77,10 @@ export default function App() {
           multiple: false,
           types: [
             {
-              description: 'YAML files',
+              description: 'Event files (YAML or TXT)',
               accept: {
                 'text/yaml': ['.yaml', '.yml'],
-                'text/plain': ['.yaml', '.yml'],
+                'text/plain': ['.yaml', '.yml', '.txt'],
               },
             },
           ],
@@ -103,7 +118,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    void loadText('public/budget_events.yaml', loadDefaultBudgetEvents)
+    void loadText('public/budget_events.txt', loadDefaultBudgetEvents)
   }, [])
 
   useEffect(() => {
@@ -119,7 +134,7 @@ export default function App() {
           const signature = fileSignature(file)
           if (signature === fileSignatureRef.current) return
           const text = await file.text()
-          applyBudgetEvents(text)
+          applyBudgetEvents(text, file.name)
           fileSignatureRef.current = signature
           setStatus('Auto reloaded')
           setError(null)
@@ -137,6 +152,7 @@ export default function App() {
 
   return (
     <main className="min-w-0 px-5 py-5">
+      <EventEditor isOpen={editorOpen} onToggle={() => setEditorOpen(!editorOpen)} />
       <section className="sticky top-0 z-[80] mb-0 flex flex-wrap items-center gap-2 rounded-t-md border border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-600 shadow-sm backdrop-blur">
         <span className="font-semibold text-slate-900">Data</span>
         <span className="max-w-full truncate tabular-nums">{sourceName}</span>
@@ -145,7 +161,7 @@ export default function App() {
           onClick={() => void chooseFile()}
           className="rounded border border-slate-200 px-2 py-1 font-medium hover:bg-slate-50"
         >
-          Open YAML
+          Open File
         </button>
         <button
           type="button"
@@ -153,6 +169,13 @@ export default function App() {
           className="rounded border border-slate-200 px-2 py-1 font-medium hover:bg-slate-50"
         >
           Reload
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditorOpen(!editorOpen)}
+          className="rounded border border-slate-200 px-2 py-1 font-medium hover:bg-slate-50"
+        >
+          Events
         </button>
         <label className="inline-flex items-center gap-1.5">
           <input
@@ -171,7 +194,7 @@ export default function App() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".yaml,.yml,text/yaml,text/plain"
+          accept=".yaml,.yml,.txt,text/yaml,text/plain"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0]

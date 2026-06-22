@@ -1,18 +1,20 @@
 import { useState } from 'react'
-import type { AppData } from '../types'
+import { useStore } from '../store/useStore'
 import { exportEventsTXT } from '../lib/io'
 
 interface EventEditorProps {
-  appData: AppData
   isOpen: boolean
   onToggle: () => void
 }
 
-export function EventEditor({ appData, isOpen, onToggle }: EventEditorProps) {
-  const [editingEvent, setEditingEvent] = useState<any>(null)
+export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
+  const { rawEvents, updateRawEvents, settings } = useStore()
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [newEventOpen, setNewEventOpen] = useState(false)
 
-  const handleExport = () => {
-    const txt = exportEventsTXT(appData)
+  const handleDownload = () => {
+    const appData = useStore.getState()
+    const txt = exportEventsTXT(appData, settings.startMonth, settings.endMonth)
     const blob = new Blob([txt], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -22,61 +24,91 @@ export function EventEditor({ appData, isOpen, onToggle }: EventEditorProps) {
     URL.revokeObjectURL(url)
   }
 
-  const allEvents = reconstructEvents()
+  const handleAddEvent = (event: any) => {
+    const newEvents = [...rawEvents, event]
+    updateRawEvents(newEvents)
+    setNewEventOpen(false)
+  }
+
+  const handleUpdateEvent = (idx: number, event: any) => {
+    const newEvents = [...rawEvents]
+    newEvents[idx] = event
+    updateRawEvents(newEvents)
+    setEditingIdx(null)
+  }
+
+  const handleDeleteEvent = (idx: number) => {
+    const newEvents = rawEvents.filter((_, i) => i !== idx)
+    updateRawEvents(newEvents)
+  }
 
   return (
     <>
-      {/* Toggle Button */}
-      <button
-        onClick={onToggle}
-        className="fixed left-4 top-4 z-40 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-        title="Toggle event editor"
-      >
-        {isOpen ? '✕ Close' : '✎ Events'}
-      </button>
-
       {/* Slide-out Panel */}
       <div
-        className={`fixed left-0 top-0 h-screen w-96 bg-white shadow-2xl transform transition-transform duration-300 z-30 overflow-auto ${
+        className={`fixed left-0 top-0 h-screen w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 z-[85] overflow-auto ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-4 sticky top-0 bg-gray-50 border-b">
-          <h2 className="text-lg font-bold mb-3">Event Editor</h2>
+        {/* Header */}
+        <div className="sticky top-0 bg-gray-50 border-b p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">Events</h2>
+            <button
+              onClick={onToggle}
+              className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+            >
+              ✕
+            </button>
+          </div>
           <div className="flex gap-2">
             <button
-              onClick={handleExport}
-              className="flex-1 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+              onClick={handleDownload}
+              className="flex-1 px-3 py-2 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700"
             >
-              Export .txt
+              Download .txt
             </button>
             <button
-              onClick={() => setEditingEvent({ new: true })}
-              className="flex-1 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+              onClick={() => setNewEventOpen(true)}
+              className="flex-1 px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700"
             >
               Add Event
             </button>
           </div>
         </div>
 
-        <div className="p-4">
-          {editingEvent ? (
+        {/* Content */}
+        <div className="p-3 space-y-2">
+          {newEventOpen && (
             <EventForm
-              event={editingEvent}
-              onSave={() => {
-                // TODO: update appData
-                setEditingEvent(null)
-              }}
-              onCancel={() => setEditingEvent(null)}
+              isNew
+              event={{}}
+              onSave={handleAddEvent}
+              onCancel={() => setNewEventOpen(false)}
             />
+          )}
+
+          {rawEvents.length === 0 ? (
+            <div className="text-gray-500 text-sm py-8 text-center">No events loaded</div>
           ) : (
-            <EventTable
-              events={allEvents}
-              onEdit={(event) => setEditingEvent({ ...event })}
-              onDelete={() => {
-                // TODO: delete from appData
-              }}
-            />
+            rawEvents.map((event, idx) => (
+              <div key={idx}>
+                {editingIdx === idx ? (
+                  <EventForm
+                    event={event}
+                    onSave={(updated) => handleUpdateEvent(idx, updated)}
+                    onCancel={() => setEditingIdx(null)}
+                  />
+                ) : (
+                  <EventRow
+                    event={event}
+                    idx={idx}
+                    onEdit={() => setEditingIdx(idx)}
+                    onDelete={() => handleDeleteEvent(idx)}
+                  />
+                )}
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -84,7 +116,7 @@ export function EventEditor({ appData, isOpen, onToggle }: EventEditorProps) {
       {/* Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-20 z-20"
+          className="fixed inset-0 bg-black bg-opacity-20 z-[84]"
           onClick={onToggle}
         />
       )}
@@ -92,92 +124,94 @@ export function EventEditor({ appData, isOpen, onToggle }: EventEditorProps) {
   )
 }
 
-function EventTable({
-  events,
+function EventRow({
+  event,
+  idx,
   onEdit,
   onDelete,
 }: {
-  events: any[]
-  onEdit: (e: any) => void
-  onDelete: (e: any) => void
+  event: any
+  idx: number
+  onEdit: () => void
+  onDelete: () => void
 }) {
   return (
-    <div className="space-y-2">
-      {events.length === 0 ? (
-        <p className="text-gray-500 text-sm">No events</p>
-      ) : (
-        events.map((event, i) => (
-          <div
-            key={i}
-            className="p-3 bg-gray-100 rounded text-sm border-l-4 border-blue-500"
-          >
-            <div className="font-mono text-xs mb-2 text-gray-700">
-              {event.month} | {event.type}
-            </div>
-            <div className="text-gray-800 mb-2 line-clamp-2">
-              {event.name || event.grantId || event.personId || '(unnamed)'}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => onEdit(event)}
-                className="flex-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => onDelete(event)}
-                className="flex-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))
-      )}
+    <div className="p-3 bg-gray-50 rounded border-l-4 border-blue-500 space-y-2">
+      <div className="text-xs font-mono text-gray-700 font-bold">
+        {event.month} | {event.type}
+      </div>
+      <div className="text-sm text-gray-800 line-clamp-2">
+        {event.name || event.grantId || event.personId || `(Event ${idx + 1})`}
+      </div>
+      <div className="text-xs text-gray-600 space-y-1">
+        {event.grantId && <div>Grant: {event.grantId}</div>}
+        {event.personId && <div>Person: {event.personId}</div>}
+        {event.effort && <div>Effort: {event.effort}%</div>}
+        {event.amount && <div>Amount: {event.amount}</div>}
+        {event.annualSalary && <div>Salary: ${event.annualSalary}</div>}
+      </div>
+      <div className="flex gap-2 pt-2">
+        <button
+          onClick={onEdit}
+          className="flex-1 px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+        >
+          Edit
+        </button>
+        <button
+          onClick={onDelete}
+          className="flex-1 px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+        >
+          Delete
+        </button>
+      </div>
     </div>
   )
 }
 
 function EventForm({
   event,
+  isNew,
   onSave,
   onCancel,
 }: {
   event: any
+  isNew?: boolean
   onSave: (e: any) => void
   onCancel: () => void
 }) {
-  const [formData, setFormData] = useState(event)
+  const [data, setData] = useState(event)
 
   const handleChange = (key: string, value: any) => {
-    setFormData({ ...formData, [key]: value })
+    setData({ ...data, [key]: value || undefined })
   }
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        onSave(formData)
+        onSave(data)
       }}
-      className="space-y-3"
+      className="p-3 bg-blue-50 rounded border border-blue-200 space-y-2"
     >
       <div>
-        <label className="block text-xs font-bold mb-1">Month</label>
+        <label className="block text-xs font-bold mb-1 text-gray-700">Month *</label>
         <input
           type="text"
           placeholder="YYYY-MM"
-          value={formData.month || ''}
+          value={data.month || ''}
           onChange={(e) => handleChange('month', e.target.value)}
-          className="w-full px-2 py-1 border rounded text-sm"
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          required
         />
       </div>
 
       <div>
-        <label className="block text-xs font-bold mb-1">Type</label>
+        <label className="block text-xs font-bold mb-1 text-gray-700">Type *</label>
         <select
-          value={formData.type || ''}
+          value={data.type || ''}
           onChange={(e) => handleChange('type', e.target.value)}
-          className="w-full px-2 py-1 border rounded text-sm"
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          required
         >
           <option value="">Select type</option>
           <option>start_grant</option>
@@ -190,47 +224,116 @@ function EventForm({
         </select>
       </div>
 
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs font-bold mb-1 text-gray-700">Grant ID</label>
+          <input
+            type="text"
+            value={data.grantId || ''}
+            onChange={(e) => handleChange('grantId', e.target.value)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold mb-1 text-gray-700">Person ID</label>
+          <input
+            type="text"
+            value={data.personId || ''}
+            onChange={(e) => handleChange('personId', e.target.value)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+      </div>
+
       <div>
-        <label className="block text-xs font-bold mb-1">Grant ID</label>
+        <label className="block text-xs font-bold mb-1 text-gray-700">Name</label>
         <input
           type="text"
-          value={formData.grantId || ''}
-          onChange={(e) => handleChange('grantId', e.target.value)}
-          className="w-full px-2 py-1 border rounded text-sm"
+          value={data.name || ''}
+          onChange={(e) => handleChange('name', e.target.value)}
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs font-bold mb-1 text-gray-700">Effort %</label>
+          <input
+            type="number"
+            value={data.effort || ''}
+            onChange={(e) => handleChange('effort', e.target.value ? parseFloat(e.target.value) : undefined)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold mb-1 text-gray-700">Amount</label>
+          <input
+            type="text"
+            value={data.amount || ''}
+            onChange={(e) => handleChange('amount', e.target.value)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-xs font-bold mb-1 text-gray-700">Start Month</label>
+          <input
+            type="text"
+            placeholder="YYYY-MM"
+            value={data.startMonth || ''}
+            onChange={(e) => handleChange('startMonth', e.target.value)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold mb-1 text-gray-700">End Month</label>
+          <input
+            type="text"
+            placeholder="YYYY-MM"
+            value={data.endMonth || ''}
+            onChange={(e) => handleChange('endMonth', e.target.value)}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold mb-1 text-gray-700">Annual Salary</label>
+        <input
+          type="number"
+          value={data.annualSalary || ''}
+          onChange={(e) => handleChange('annualSalary', e.target.value ? parseFloat(e.target.value) : undefined)}
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-bold mb-1">Person ID</label>
+        <label className="block text-xs font-bold mb-1 text-gray-700">Description</label>
         <input
           type="text"
-          value={formData.personId || ''}
-          onChange={(e) => handleChange('personId', e.target.value)}
-          className="w-full px-2 py-1 border rounded text-sm"
+          value={data.description || ''}
+          onChange={(e) => handleChange('description', e.target.value)}
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
         />
       </div>
 
-      <div className="pt-3 flex gap-2">
+      <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+          className="flex-1 px-3 py-2 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700"
         >
-          Save
+          {isNew ? 'Add' : 'Save'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 px-3 py-2 bg-gray-400 text-white text-sm rounded hover:bg-gray-500"
+          className="flex-1 px-3 py-2 bg-gray-400 text-white text-xs font-medium rounded hover:bg-gray-500"
         >
           Cancel
         </button>
       </div>
     </form>
   )
-}
-
-function reconstructEvents(): any[] {
-  // TODO: Reconstruct events from AppData
-  // This will show grants, allocations, expenses, etc.
-  return []
 }

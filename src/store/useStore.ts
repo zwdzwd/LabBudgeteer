@@ -8,11 +8,12 @@ export function allocKey(personId: string, grantId: string, month: string): stri
 }
 
 // The app is a read-only simulator: the YAML event file is the source of truth
-// and is reloaded on every page load (see App.tsx). The store therefore holds
-// only the compiled snapshot plus a single bulk-replace action — there is no
-// editing UI and nothing to persist between sessions.
+// and is reloaded on every page load (see App.tsx). The store holds the compiled
+// snapshot plus raw events (if available) for the event editor.
 type State = AppData & {
-  replaceAll: (data: AppData) => void
+  rawEvents: Record<string, any>[]
+  replaceAll: (data: AppData, rawEvents?: Record<string, any>[]) => void
+  updateRawEvents: (events: Record<string, any>[]) => void
 }
 
 const initialData: AppData = {
@@ -28,5 +29,7 @@ const initialData: AppData = {
 
 export const useStore = create<State>()((set) => ({
   ...initialData,
-  replaceAll: (data) => set(() => ({ ...data })),
+  rawEvents: [],
+  replaceAll: (data, rawEvents = []) => set(() => ({ ...data, rawEvents })),
+  updateRawEvents: (events) => set(() => ({ rawEvents: events })),
 }))

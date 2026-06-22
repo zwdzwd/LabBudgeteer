@@ -217,6 +217,9 @@ export function parseImportedTXT(text: string): AppData {
     events.push(event)
   }
 
+  // Keep raw events for editing
+  lastParsedEvents = events
+
   const eventFile: EventFile = { schemaVersion, settings, events: events as any }
   const result = eventFileSchema.safeParse(eventFile)
   if (!result.success) {
@@ -734,4 +737,18 @@ function appendUniqueMonth(months: string[] | undefined, month: string): string[
   const next = new Set(months ?? [])
   next.add(month)
   return [...next].sort()
+}
+
+// Store raw events for the editor
+let lastParsedEvents: Record<string, any>[] = []
+
+export function getLastParsedEvents(): Record<string, any>[] {
+  return lastParsedEvents
+}
+
+/** Parse TXT and keep track of raw events for editing. */
+export function parseImportedTXTWithEvents(text: string): { appData: AppData; events: Record<string, any>[] } {
+  const appData = parseImportedTXT(text)
+  const events = [...lastParsedEvents]
+  return { appData, events }
 }
