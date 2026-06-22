@@ -2,6 +2,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -9,6 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useStore } from '../store/useStore'
+import { eventTypeColor } from '../lib/eventTypes'
 import { monthlySalary, type MonthBalance } from '../lib/calc'
 import { compactMoney, money } from '../lib/format'
 import { currentMonth, formatMonth, monthRange } from '../lib/months'
@@ -36,6 +38,7 @@ export function GrantBalanceChart({
   selectedGrantId,
   onSelectedGrantChange,
   year,
+  highlight,
 }: {
   grants: Grant[]
   seriesByGrant: Map<string, MonthBalance[]>
@@ -47,6 +50,7 @@ export function GrantBalanceChart({
   selectedGrantId: string | null
   onSelectedGrantChange: (grantId: string | null) => void
   year: number
+  highlight?: { month: string; grantId?: string | null; type?: string } | null
 }) {
   const selectedGrant = selectedGrantId
     ? (grants.find((grant) => grant.id === selectedGrantId) ?? null)
@@ -80,6 +84,19 @@ export function GrantBalanceChart({
     return row
   })
 
+  // Resolve the hovered event to a concrete point on a grant line, if it falls
+  // within the displayed year and that grant has a value that month.
+  const highlightPoint = (() => {
+    if (!highlight?.grantId) return null
+    const grant = grants.find((g) => g.id === highlight.grantId)
+    if (!grant) return null
+    if (selectedGrant && selectedGrant.id !== grant.id) return null
+    const row = chartData.find((r) => r.month === highlight.month)
+    const y = row?.remaining[grant.id]
+    if (row == null || y == null) return null
+    return { label: row.label, y, color: eventTypeColor(highlight.type) }
+  })()
+
   // The plotted line is floored at zero, so flag any grant whose true balance
   // goes negative — the first month it does is when the grant is overspent.
   const overspent = visibleGrants
@@ -108,7 +125,7 @@ export function GrantBalanceChart({
       <div className="rounded-md border border-slate-200 bg-white p-2">
         <div style={{ width: '100%', height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 12, right: 24, bottom: 10, left: 16 }}>
+            <LineChart data={chartData} syncId="budget-month" margin={{ top: 12, right: 24, bottom: 10, left: 16 }}>
               <CartesianGrid stroke="#e2e8f0" vertical={false} />
               <XAxis
                 dataKey="label"
@@ -152,6 +169,18 @@ export function GrantBalanceChart({
                   isAnimationActive={false}
                 />
               ))}
+              {highlightPoint && (
+                <ReferenceDot
+                  x={highlightPoint.label}
+                  y={highlightPoint.y}
+                  r={8}
+                  stroke={highlightPoint.color}
+                  strokeWidth={3}
+                  fill="#fff"
+                  fillOpacity={0.85}
+                  ifOverflow="extendDomain"
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>

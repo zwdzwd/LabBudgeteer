@@ -49,16 +49,17 @@ const grantRef = z.object({
 })
 
 const salaryRateEventSchema = personRef.extend({
-  type: z.literal('salary_rate'),
+  type: z.literal('personnel_salary_rate'),
   month,
   annualSalary: z.number(),
 })
 
 const startGrantEventSchema = z.object({
-  type: z.literal('start_grant'),
+  type: z.literal('grant_start'),
   month,
   grantId: z.string().optional(),
   name: z.string(),
+  grtNumber: z.string().optional(),
   sponsor: z.string().optional(),
   accountType: accountType.optional(),
   nextReportMonth: month.optional(),
@@ -71,7 +72,7 @@ const startGrantEventSchema = z.object({
 })
 
 const coverPersonEventSchema = personRef.extend({
-  type: z.literal('cover_person'),
+  type: z.literal('personnel_cover'),
   month,
   grantId: z.string().optional(),
   grantName: z.string().optional(),
@@ -86,6 +87,7 @@ const grantRenewEventSchema = grantRef.extend({
   type: z.literal('grant_renew'),
   month,
   name: z.string().optional(),
+  grtNumber: z.string().optional(),
   sponsor: z.string().optional(),
   accountType: accountType.optional(),
   nextReportMonth: month.optional(),
@@ -96,12 +98,12 @@ const grantRenewEventSchema = grantRef.extend({
 })
 
 const terminatePersonnelEventSchema = personRef.extend({
-  type: z.literal('terminate_personnel'),
+  type: z.literal('personnel_terminate'),
   month,
 })
 
 const oneOffExpenditureEventSchema = grantRef.extend({
-  type: z.literal('one_off_expenditure'),
+  type: z.literal('grant_cost'),
   month,
   expenseId: z.string().optional(),
   amount: z.number(),
@@ -109,7 +111,7 @@ const oneOffExpenditureEventSchema = grantRef.extend({
 })
 
 const endGrantEventSchema = grantRef.extend({
-  type: z.literal('end_grant'),
+  type: z.literal('grant_end'),
   month,
 })
 
@@ -130,7 +132,7 @@ const eventFileSchema = z.object({
 })
 
 type EventFile = z.infer<typeof eventFileSchema>
-type CoverPersonEvent = Extract<EventFile['events'][number], { type: 'cover_person' }>
+type CoverPersonEvent = Extract<EventFile['events'][number], { type: 'personnel_cover' }>
 type CappedCoverPersonEvent = CoverPersonEvent & { capAtTotal: number }
 
 /** Parse + validate imported YAML. Throws with a friendly message on failure. */
@@ -160,7 +162,7 @@ export function parseImportedTXT(text: string): AppData {
 
   if (lines.length < 2) throw new Error('File is too short.')
 
-  let schemaVersion = 8
+  let schemaVersion = SCHEMA_VERSION
   let settings: z.infer<typeof settingsSchema> = {}
   let eventStartIdx = 0
 
@@ -199,20 +201,17 @@ export function parseImportedTXT(text: string): AppData {
     if (!line.trim()) continue
 
     const parts = line.split('|').map(p => p.trim())
-    if (parts.length < 5) continue
+    if (parts.length < 2) continue
 
     const event: Record<string, unknown> = {
       month: parts[0],
       type: parts[1],
     }
 
-    if (parts[2]) event.grantId = parts[2]
-    if (parts[3]) event.personId = parts[3]
-
-    // Parse details (key:value pairs)
-    const detailsStr = parts.slice(4).join('|').trim()
-    const detailPairs = parseDetailsPairs(detailsStr)
-    Object.assign(event, detailPairs)
+    // Everything after type is key:value details, including the optional
+    // grantId / personId keys (no longer fixed positional columns).
+    const detailsStr = parts.slice(2).join('|').trim()
+    Object.assign(event, parseDetailsPairs(detailsStr))
 
     events.push(event)
   }
@@ -235,6 +234,15 @@ function parseDetailsPairs(detailsStr: string): Record<string, unknown> {
   let current = ''
   let inQuotes = false
 
+  const commit = (token: string) => {
+    // Split on the FIRST colon only, so values may contain colons.
+    const idx = token.indexOf(':')
+    if (idx <= 0) return
+    const k = token.slice(0, idx)
+    const v = token.slice(idx + 1)
+    if (k && v) result[k] = parseValue(v)
+  }
+
   for (let i = 0; i < detailsStr.length; i++) {
     const char = detailsStr[i]
     if (char === '"') {
@@ -242,8 +250,7 @@ function parseDetailsPairs(detailsStr: string): Record<string, unknown> {
       current += char
     } else if (char === ' ' && !inQuotes) {
       if (current) {
-        const [k, v] = current.split(':')
-        if (k && v) result[k] = parseValue(v)
+        commit(current)
         current = ''
       }
     } else {
@@ -251,10 +258,7 @@ function parseDetailsPairs(detailsStr: string): Record<string, unknown> {
     }
   }
 
-  if (current) {
-    const [k, v] = current.split(':')
-    if (k && v) result[k] = parseValue(v)
-  }
+  if (current) commit(current)
 
   return result
 }
@@ -264,11 +268,12 @@ function parseValue(val: string): unknown {
   if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
     return trimmed.slice(1, -1)
   }
+  if (trimmed === '') return ''
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
   if (!isNaN(Number(trimmed))) {
     return Number(trimmed)
   }
-  if (trimmed === 'true') return true
-  if (trimmed === 'false') return false
   return trimmed
 }
 
@@ -295,10 +300,10 @@ export function exportEventsTXT(
 
   // Add salary rates
   for (const sr of appData.salaryRates) {
-    const key = `${sr.month}|salary_rate|${sr.personId}`
+    const key = `${sr.month}|personnel_salary_rate|${sr.personId}`
     eventMap.set(key, {
       month: sr.month,
-      type: 'salary_rate',
+      type: 'personnel_salary_rate',
       personId: sr.personId,
       annualSalary: sr.annualSalary,
     })
@@ -306,10 +311,10 @@ export function exportEventsTXT(
 
   // Add grants
   for (const grant of appData.grants) {
-    const startKey = `${grant.startMonth}|start_grant|${grant.id}`
+    const startKey = `${grant.startMonth}|grant_start|${grant.id}`
     const startEvent: any = {
       month: grant.startMonth,
-      type: 'start_grant',
+      type: 'grant_start',
       grantId: grant.id,
       name: grant.name,
     }
@@ -322,10 +327,10 @@ export function exportEventsTXT(
     eventMap.set(startKey, startEvent)
 
     if (grant.endMonth) {
-      const endKey = `${grant.endMonth}|end_grant|${grant.id}`
+      const endKey = `${grant.endMonth}|grant_end|${grant.id}`
       eventMap.set(endKey, {
         month: grant.endMonth,
-        type: 'end_grant',
+        type: 'grant_end',
         grantId: grant.id,
         name: grant.name,
       })
@@ -334,10 +339,10 @@ export function exportEventsTXT(
 
   // Add allocations
   for (const alloc of appData.allocations) {
-    const key = `${alloc.month}|cover_person|${alloc.grantId}|${alloc.personId}`
+    const key = `${alloc.month}|personnel_cover|${alloc.grantId}|${alloc.personId}`
     eventMap.set(key, {
       month: alloc.month,
-      type: 'cover_person',
+      type: 'personnel_cover',
       grantId: alloc.grantId,
       personId: alloc.personId,
       effort: alloc.effort,
@@ -346,10 +351,10 @@ export function exportEventsTXT(
 
   // Add expenses
   for (const exp of appData.expenses) {
-    const key = `${exp.month}|one_off_expenditure|${exp.grantId}|${exp.id}`
+    const key = `${exp.month}|grant_cost|${exp.grantId}|${exp.id}`
     eventMap.set(key, {
       month: exp.month,
-      type: 'one_off_expenditure',
+      type: 'grant_cost',
       grantId: exp.grantId,
       amount: exp.amount,
       description: exp.description,
@@ -370,7 +375,7 @@ export function exportEventsTXT(
   }
 
   // Header
-  lines.push('month | type | grantId | personId | details')
+  lines.push('month | type | details')
 
   // Sort and output events
   const sorted = Array.from(eventMap.values()).sort((a, b) => {
@@ -382,17 +387,18 @@ export function exportEventsTXT(
   for (const event of sorted) {
     const month = event.month
     const type = event.type
-    const grantId = event.grantId || ''
-    const personId = event.personId || ''
 
+    // grantId / personId lead the details as plain keys, then everything else.
     const details: string[] = []
+    if (event.grantId) details.push(`grantId:${event.grantId}`)
+    if (event.personId) details.push(`personId:${event.personId}`)
     for (const [k, v] of Object.entries(event)) {
       if (['month', 'type', 'grantId', 'personId'].includes(k)) continue
       const val = typeof v === 'string' && (v.includes(' ') || v.includes(':')) ? `"${v}"` : v
       details.push(`${k}:${val}`)
     }
 
-    lines.push(`${month} | ${type} | ${grantId} | ${personId} | ${details.join(' ')}`)
+    lines.push(`${month} | ${type} | ${details.join(' ')}`)
   }
 
   return lines.join('\n')
@@ -412,13 +418,13 @@ function compileEvents(file: EventFile): AppData {
   const cappedCoverageEvents: CappedCoverPersonEvent[] = []
 
   for (const event of file.events) {
-    if (event.type !== 'end_grant') continue
+    if (event.type !== 'grant_end') continue
     const key = event.grantId ?? (event.name ? slugId(event.name, 'grant') : undefined)
     if (key) endByGrant.set(key, event.month)
   }
 
   for (const event of file.events) {
-    if (event.type === 'salary_rate') {
+    if (event.type === 'personnel_salary_rate') {
       const person = ensurePerson(people, personNameToId, event)
       person.annualSalary = event.annualSalary
       salaryRates.push({
@@ -429,13 +435,14 @@ function compileEvents(file: EventFile): AppData {
       continue
     }
 
-    if (event.type === 'start_grant') {
+    if (event.type === 'grant_start') {
       const id = event.grantId ?? slugId(event.name, 'grant')
       const endMonth = event.endMonth ?? endByGrant.get(id) ?? event.month
       const colorIndex = grants.size % GRANT_COLORS.length
       const grant: Grant = {
         id,
         name: event.name,
+        grtNumber: event.grtNumber,
         sponsor: event.sponsor,
         accountType: event.accountType,
         nextReportMonth: event.nextReportMonth,
@@ -461,6 +468,7 @@ function compileEvents(file: EventFile): AppData {
       const updated: Grant = {
         ...grant,
         name: event.name ?? grant.name,
+        grtNumber: event.grtNumber ?? grant.grtNumber,
         sponsor: event.sponsor ?? grant.sponsor,
         accountType: event.accountType ?? grant.accountType,
         nextReportMonth: event.nextReportMonth ?? grant.nextReportMonth,
@@ -499,7 +507,7 @@ function compileEvents(file: EventFile): AppData {
       continue
     }
 
-    if (event.type === 'cover_person') {
+    if (event.type === 'personnel_cover') {
       if (event.capAtTotal != null) {
         cappedCoverageEvents.push({ ...event, capAtTotal: event.capAtTotal })
         continue
@@ -537,7 +545,7 @@ function compileEvents(file: EventFile): AppData {
       continue
     }
 
-    if (event.type === 'terminate_personnel') {
+    if (event.type === 'personnel_terminate') {
       const personId = resolvePersonId(people, personNameToId, event)
       terminationByPerson.set(personId, event.month)
       const person = people.get(personId)
@@ -551,7 +559,7 @@ function compileEvents(file: EventFile): AppData {
       continue
     }
 
-    if (event.type === 'one_off_expenditure') {
+    if (event.type === 'grant_cost') {
       const grantId = resolveGrantId(grants, grantNameToId, event)
       expenses.push({
         id: event.expenseId ?? `expense-${String(expenses.length + 1).padStart(3, '0')}`,
@@ -563,7 +571,7 @@ function compileEvents(file: EventFile): AppData {
       continue
     }
 
-    if (event.type === 'end_grant') {
+    if (event.type === 'grant_end') {
       const grantId = resolveGrantId(grants, grantNameToId, event)
       const grant = grants.get(grantId)
       if (grant) grants.set(grantId, { ...grant, endMonth: event.month })

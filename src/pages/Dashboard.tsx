@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { GrantBalanceChart } from '../components/GrantBalanceChart'
 import { EffortCharts } from '../components/EffortCharts'
+import { EventList } from '../components/EventEditor'
 import { useStore } from '../store/useStore'
 import { grantBalanceSeries, grantHasBudget, type MonthBalance } from '../lib/calc'
 import {
@@ -12,12 +13,10 @@ import {
 } from '../lib/months'
 
 type Grant = ReturnType<typeof useStore.getState>['grants'][number]
-type Allocation = ReturnType<typeof useStore.getState>['allocations'][number]
 type AccountType = NonNullable<Grant['accountType']>
 type HoverSnapshot = {
   grant: Grant
   type: AccountType
-  effort: string
   left: number
   top: number
 }
@@ -30,7 +29,7 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   supplemental: 'Supplemental',
 }
 
-export function Dashboard() {
+export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
   const people = useStore((s) => s.people)
   const grants = useStore((s) => s.grants)
   const allocations = useStore((s) => s.allocations)
@@ -45,6 +44,12 @@ export function Dashboard() {
   // Which grant's curve is isolated in the balance chart; null shows all grants.
   const [selectedGrantId, setSelectedGrantId] = useState<string | null>(null)
   const [hoverSnapshot, setHoverSnapshot] = useState<HoverSnapshot | null>(null)
+  // Event currently hovered in the viewer, highlighted on the balance chart.
+  const [hoveredEvent, setHoveredEvent] = useState<{
+    month: string
+    grantId?: string | null
+    type?: string
+  } | null>(null)
 
   // Full month axis spanning the whole plan, shared by every chart. Prefer the
   // explicit settings window, else derive it from the grants and allocations.
@@ -81,8 +86,6 @@ export function Dashboard() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [firstYear, lastYear])
-  const snapshotReferenceMonth =
-    chartYear === currentYear ? currentMonth() : `${chartYear}-12`
   const activeSnapshotGrants = useMemo(
     () => grants.filter((grant) => grantIsActiveInYear(grant, chartYear)),
     [grants, chartYear],
@@ -141,7 +144,7 @@ export function Dashboard() {
   return (
     <div>
       {(grants.length > 0 || people.length > 0) && (
-        <div className="sticky top-8 z-[70] -mx-1 flex flex-wrap items-center justify-center gap-1.5 border-x border-b border-slate-200 bg-white/95 px-1 py-1 shadow-sm backdrop-blur">
+        <div className="sticky top-[33px] z-[70] -mx-5 flex flex-wrap items-center justify-center gap-1.5 border-b border-slate-200 bg-white/95 px-5 py-1.5 shadow-sm backdrop-blur">
           <button
             type="button"
             onClick={() => {
@@ -149,15 +152,15 @@ export function Dashboard() {
               setChartYear((year) => Math.max(firstYear, year - 1))
             }}
             disabled={chartYear <= firstYear}
-            className="rounded border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            ← Prev year
+            ← Prev
           </button>
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowYearPicker((show) => !show)}
-              className="rounded border border-slate-200 px-2.5 py-1 text-base font-semibold tabular-nums text-slate-900 hover:bg-slate-50"
+              className="rounded border border-slate-200 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-900 hover:bg-slate-50"
               aria-expanded={showYearPicker}
             >
               {chartYear}
@@ -189,9 +192,9 @@ export function Dashboard() {
               setChartYear(clampedCurrentYear)
             }}
             disabled={chartYear === clampedCurrentYear}
-            className="rounded border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Current year
+            Current
           </button>
           <button
             type="button"
@@ -200,17 +203,17 @@ export function Dashboard() {
               setChartYear((year) => Math.min(lastYear, year + 1))
             }}
             disabled={chartYear >= lastYear}
-            className="rounded border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Next year →
+            Next →
           </button>
         </div>
       )}
 
-      <div className="mt-3 flex flex-col items-stretch gap-3 lg:flex-row lg:items-start">
+      <div className="mt-3 flex flex-col items-stretch gap-3 lg:flex-row lg:items-stretch">
         {/* 1. Budget snapshot */}
         {activeSnapshotGrants.length > 0 && (
-          <aside className="z-[60] max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur lg:sticky lg:top-[69px] lg:max-h-[calc(100vh-76px)] lg:w-64 lg:shrink-0">
+          <aside className="z-[60] max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur lg:sticky lg:top-[70px] lg:max-h-[calc(100vh-76px)] lg:w-64 lg:shrink-0">
             <div className="space-y-2">
               {grantsByAccountType.map(({ type, grants }) => (
                 <div key={type}>
@@ -219,12 +222,6 @@ export function Dashboard() {
                   </div>
                   <div className="space-y-1">
                     {grants.map((grant) => {
-                      const effort = effortSummaryForGrant(
-                        grant,
-                        allocations,
-                        peopleById,
-                        snapshotReferenceMonth,
-                      )
                       const selected = selectedGrantId === grant.id
                       const reportMonth = reportMonthForYear(grant, chartYear)
                       return (
@@ -233,15 +230,11 @@ export function Dashboard() {
                           type="button"
                           onClick={() => setSelectedGrantId(selected ? null : grant.id)}
                           onMouseEnter={(event) =>
-                            setHoverSnapshot(
-                              snapshotHoverState(event.currentTarget, grant, type, effort),
-                            )
+                            setHoverSnapshot(snapshotHoverState(event.currentTarget, grant, type))
                           }
                           onMouseLeave={() => setHoverSnapshot(null)}
                           onFocus={(event) =>
-                            setHoverSnapshot(
-                              snapshotHoverState(event.currentTarget, grant, type, effort),
-                            )
+                            setHoverSnapshot(snapshotHoverState(event.currentTarget, grant, type))
                           }
                           onBlur={() => setHoverSnapshot(null)}
                           aria-pressed={selected}
@@ -287,6 +280,7 @@ export function Dashboard() {
               selectedGrantId={selectedGrantId}
               onSelectedGrantChange={setSelectedGrantId}
               year={chartYear}
+              highlight={hoveredEvent}
             />
           )}
 
@@ -296,11 +290,25 @@ export function Dashboard() {
               people={people}
               grants={grants}
               allocations={allocations}
+              salaryRates={salaryRates}
               year={chartYear}
               selectedGrantId={selectedGrantId}
             />
           )}
         </div>
+
+        {/* 4. Event list */}
+        {showEvents && (
+          <EventList
+            year={chartYear}
+            selectedGrantId={selectedGrantId}
+            selectedGrantName={
+              selectedGrantId ? grants.find((g) => g.id === selectedGrantId)?.name ?? null : null
+            }
+            onClearGrant={() => setSelectedGrantId(null)}
+            onHoverEvent={setHoveredEvent}
+          />
+        )}
       </div>
       {hoverSnapshot && (
         <div
@@ -310,7 +318,6 @@ export function Dashboard() {
           <SnapshotTooltip
             grant={hoverSnapshot.grant}
             type={hoverSnapshot.type}
-            effort={hoverSnapshot.effort}
             year={chartYear}
           />
         </div>
@@ -369,7 +376,6 @@ function snapshotHoverState(
   target: HTMLElement,
   grant: Grant,
   type: AccountType,
-  effort: string,
 ): HoverSnapshot {
   const rect = target.getBoundingClientRect()
   const width = 288
@@ -378,7 +384,6 @@ function snapshotHoverState(
   return {
     grant,
     type,
-    effort,
     left: Math.max(margin, Math.min(centered, window.innerWidth - width - margin)),
     top: rect.bottom + 6,
   }
@@ -387,12 +392,10 @@ function snapshotHoverState(
 function SnapshotTooltip({
   grant,
   type,
-  effort,
   year,
 }: {
   grant: Grant
   type: AccountType
-  effort: string
   year: number
 }) {
   const reportMonth = reportMonthForYear(grant, year)
@@ -407,17 +410,17 @@ function SnapshotTooltip({
           />
           <span className="truncate">{grant.name}</span>
         </div>
-        <div className="mt-0.5 truncate font-mono text-[10px] text-slate-400">{grant.id}</div>
+        <div className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
+          {grant.grtNumber ? `${grant.grtNumber} · ${grant.id}` : grant.id}
+        </div>
       </div>
 
       <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1">
         <span className="text-slate-400">Type</span>
         <span className="font-medium text-slate-700">{ACCOUNT_TYPE_LABELS[type]}</span>
-        <span className="text-slate-400">Effort</span>
-        <span className="font-medium text-slate-700">{effort}</span>
         <span className="text-slate-400">Period</span>
         <span className="font-medium text-slate-700">
-          {grant.startMonth} - {grant.endMonth}
+          {grant.startMonth} to {grant.endMonth}
         </span>
         {reportMonth && (
           <>
@@ -441,28 +444,3 @@ function SnapshotTooltip({
   )
 }
 
-function effortSummaryForGrant(
-  grant: Grant,
-  allocations: Allocation[],
-  peopleById: Map<string, ReturnType<typeof useStore.getState>['people'][number]>,
-  month = currentMonth(),
-): string {
-  const active = allocations
-    .filter((allocation) => allocation.grantId === grant.id && allocation.month === month)
-    .sort((a, b) => b.effort - a.effort || a.personId.localeCompare(b.personId))
-  const rows = active.length > 0
-    ? active
-    : allocations
-        .filter((allocation) => allocation.grantId === grant.id)
-        .sort((a, b) => a.month.localeCompare(b.month) || b.effort - a.effort)
-        .slice(0, 2)
-
-  if (rows.length === 0) return 'No effort'
-  return rows
-    .slice(0, 2)
-    .map((allocation) => {
-      const person = peopleById.get(allocation.personId)
-      return `${person?.name.split(' ')[0] ?? allocation.personId} ${allocation.effort}%`
-    })
-    .join(', ')
-}

@@ -12,6 +12,8 @@ import {
 import { useStore } from '../store/useStore'
 import { currentMonth, formatMonth, monthRange } from '../lib/months'
 import { buildAllocMap, getEffort, personMonthTotal } from '../lib/totals'
+import { annualSalaryAt } from '../lib/calc'
+import { money } from '../lib/format'
 
 /** X-axis tick: just the month number, e.g. "2024-10" -> "10". */
 function monthTickLabel(month: string): string {
@@ -21,6 +23,7 @@ function monthTickLabel(month: string): string {
 type Person = ReturnType<typeof useStore.getState>['people'][number]
 type Grant = ReturnType<typeof useStore.getState>['grants'][number]
 type Allocations = ReturnType<typeof useStore.getState>['allocations']
+type SalaryRates = ReturnType<typeof useStore.getState>['salaryRates']
 
 const SENIORITY_ORDER = ['wz', 'hf', 'hx', 'cc', 'dg', 'sl']
 
@@ -28,12 +31,14 @@ export function EffortCharts({
   people,
   grants,
   allocations,
+  salaryRates,
   year,
   selectedGrantId,
 }: {
   people: Person[]
   grants: Grant[]
   allocations: Allocations
+  salaryRates: SalaryRates
   year: number
   selectedGrantId: string | null
 }) {
@@ -79,6 +84,7 @@ export function EffortCharts({
               grants={visibleGrants}
               allocations={allocations}
               allocMap={allocMap}
+              salaryRates={salaryRates}
               months={windowMonths}
               selectedGrantId={selectedGrantId}
             />
@@ -103,6 +109,7 @@ function PersonEffortChart({
   grants,
   allocations,
   allocMap,
+  salaryRates,
   months,
   selectedGrantId,
 }: {
@@ -110,6 +117,7 @@ function PersonEffortChart({
   grants: Grant[]
   allocations: Allocations
   allocMap: ReturnType<typeof buildAllocMap>
+  salaryRates: SalaryRates
   months: string[]
   selectedGrantId: string | null
 }) {
@@ -153,7 +161,7 @@ function PersonEffortChart({
       </div>
       <div style={{ width: '100%', height: 200 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+          <BarChart data={chartData} syncId="budget-month" margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
             <CartesianGrid stroke="#e2e8f0" vertical={false} />
             <XAxis
               dataKey="label"
@@ -174,7 +182,15 @@ function PersonEffortChart({
                 strokeDasharray="3 3"
               />
             )}
-            <Tooltip content={<EffortTooltip grants={grantsForPerson} />} />
+            <Tooltip
+              content={
+                <EffortTooltip
+                  grants={grantsForPerson}
+                  person={person}
+                  salaryRates={salaryRates}
+                />
+              }
+            />
             <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 4" />
             {grantsForPerson.map((grant) => (
               <Bar
@@ -209,10 +225,14 @@ function EffortTooltip({
   active,
   payload,
   grants,
+  person,
+  salaryRates,
 }: {
   active?: boolean
   payload?: TooltipPayload[]
   grants: Grant[]
+  person: Person
+  salaryRates: SalaryRates
 }) {
   if (!active || !payload || payload.length === 0) return null
   const row = payload[0]?.payload
@@ -220,11 +240,15 @@ function EffortTooltip({
   const items = grants
     .map((grant) => ({ grant, effort: row.details[grant.id] ?? 0 }))
     .filter((item) => item.effort > 0)
+  const annualSalary = annualSalaryAt(person, row.month, salaryRates)
 
   return (
     <div className="rounded-md border border-slate-200 bg-white/45 px-3 py-2 text-xs shadow-lg backdrop-blur-sm">
       <div className="font-semibold text-slate-900">{formatMonth(row.month)}</div>
-      <div className="mb-2 text-slate-500">Total: {round(row.total)}%</div>
+      <div className="text-slate-500">Total: {round(row.total)}%</div>
+      <div className="mb-2 text-slate-500">
+        Salary rate: {annualSalary > 0 ? `${money(annualSalary)}/yr` : '—'}
+      </div>
       {items.length === 0 ? (
         <div className="text-slate-400">No effort assigned.</div>
       ) : (

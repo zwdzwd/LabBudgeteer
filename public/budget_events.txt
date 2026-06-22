@@ -1,18 +1,18 @@
 schemaVersion: 9
 settings: startMonth=2024-09 endMonth=2026-12
 
-month | type | grantId | personId | details
-2024-09 | start_grant | grant-alpha |  | name:"Alpha Grant" accountType:"regular" endMonth:"2026-09" budget:100000 budgetStartMonth:"2024-09" nextReportMonth:"2025-09"
-2024-09 | start_grant | grant-beta |  | name:"Beta Project" accountType:"flexible" endMonth:"2026-12" budget:50000 budgetStartMonth:"2024-09"
-2024-10 | salary_rate |  | alice | name:"Alice" annualSalary:120000
-2024-11 | salary_rate |  | bob | name:"Bob" annualSalary:100000
-2024-12 | salary_rate |  | carol | name:"Carol" annualSalary:90000
-2024-09 | cover_person | grant-alpha | alice | name:"Alice" effort:60 startMonth:"2024-09" endMonth:"2026-09"
-2024-09 | cover_person | grant-beta | alice | name:"Alice" effort:40 startMonth:"2024-09" endMonth:"2026-12" capAtTotal:100
-2024-11 | cover_person | grant-alpha | bob | name:"Bob" effort:50 startMonth:"2024-11" endMonth:"2025-06"
-2024-11 | cover_person | grant-beta | carol | name:"Carol" effort:100 startMonth:"2024-11" endMonth:"2025-08"
-2025-03 | one_off_expenditure | grant-alpha |  | amount:5000 description:"Conference attendance"
-2025-09 | grant_renew | grant-alpha |  | nextReportMonth:"2026-09"
-2025-09 | grant_renew | grant-alpha |  | amount:"-30000" description:"Annual award installment"
-2026-09 | end_grant | grant-alpha |  | name:"Alpha Grant"
-2026-12 | end_grant | grant-beta |  | name:"Beta Project"
+month | type | details
+2024-09 | grant_start | grantId:grant-alpha name:"Alpha Grant" accountType:"regular" endMonth:"2026-09" budget:100000 budgetStartMonth:"2024-09" nextReportMonth:"2025-09"
+2024-09 | grant_start | grantId:grant-beta name:"Beta Project" accountType:"flexible" endMonth:"2026-12" budget:50000 budgetStartMonth:"2024-09"
+2024-10 | personnel_salary_rate | personId:alice name:"Alice" annualSalary:120000
+2024-11 | personnel_salary_rate | personId:bob name:"Bob" annualSalary:100000
+2024-12 | personnel_salary_rate | personId:carol name:"Carol" annualSalary:90000
+2024-09 | personnel_cover | grantId:grant-alpha personId:alice name:"Alice" effort:60 startMonth:"2024-09" endMonth:"2026-09"
+2024-09 | personnel_cover | grantId:grant-beta personId:alice name:"Alice" effort:40 startMonth:"2024-09" endMonth:"2026-12" capAtTotal:100
+2024-11 | personnel_cover | grantId:grant-alpha personId:bob name:"Bob" effort:50 startMonth:"2024-11" endMonth:"2025-06"
+2024-11 | personnel_cover | grantId:grant-beta personId:carol name:"Carol" effort:100 startMonth:"2024-11" endMonth:"2025-08"
+2025-03 | grant_cost | grantId:grant-alpha amount:5000 description:"Conference attendance"
+2025-09 | grant_renew | grantId:grant-alpha nextReportMonth:"2026-09"
+2025-09 | grant_renew | grantId:grant-alpha amount:"-30000" description:"Annual award installment"
+2026-09 | grant_end | grantId:grant-alpha name:"Alpha Grant"
+2026-12 | grant_end | grantId:grant-beta name:"Beta Project"
