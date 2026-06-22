@@ -117,8 +117,8 @@ export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
     <>
       {/* Slide-out Panel */}
       <div
-        className={`fixed left-0 top-0 h-screen w-full max-w-3xl bg-white shadow-2xl transform transition-transform duration-300 z-[85] overflow-y-auto ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed right-0 top-0 h-screen w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 z-50 overflow-y-auto ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Header */}
@@ -148,13 +148,6 @@ export function EventEditor({ isOpen, onToggle }: EventEditorProps) {
         </div>
       </div>
 
-      {/* Overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-20 z-[84]"
-          onClick={onToggle}
-        />
-      )}
     </>
   )
 }

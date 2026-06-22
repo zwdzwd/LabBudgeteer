@@ -151,9 +151,10 @@ export default function App() {
   }, [watchEnabled])
 
   return (
-    <main className="min-w-0 px-5 py-5">
+    <>
       <EventEditor isOpen={editorOpen} onToggle={() => setEditorOpen(!editorOpen)} />
-      <section className="sticky top-0 z-[80] mb-0 flex flex-wrap items-center gap-2 rounded-t-md border border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-600 shadow-sm backdrop-blur">
+      <main className={`min-w-0 px-5 py-5 transition-all duration-300 ${editorOpen ? 'pr-96' : ''}`}>
+        <section className="sticky top-0 z-[80] mb-0 flex flex-wrap items-center gap-2 rounded-t-md border border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-600 shadow-sm backdrop-blur">
         <span className="font-semibold text-slate-900">Data</span>
         <span className="max-w-full truncate tabular-nums">{sourceName}</span>
         <button
@@ -173,7 +174,11 @@ export default function App() {
         <button
           type="button"
           onClick={() => setEditorOpen(!editorOpen)}
-          className="rounded border border-slate-200 px-2 py-1 font-medium hover:bg-slate-50"
+          className={`rounded border px-2 py-1 font-medium transition-colors ${
+            editorOpen
+              ? 'bg-slate-900 text-white border-slate-900'
+              : 'border-slate-200 text-slate-900 hover:bg-slate-50'
+          }`}
         >
           Events
         </button>
@@ -211,7 +216,8 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </main>
+      </main>
+    </>
   )
 }
 
