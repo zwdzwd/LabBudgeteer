@@ -153,7 +153,7 @@ export default function App() {
   return (
     <>
       <EventEditor isOpen={editorOpen} onToggle={() => setEditorOpen(!editorOpen)} />
-      <main className={`min-w-0 px-5 py-5 transition-all duration-300 ${editorOpen ? 'pr-96' : ''}`}>
+      <main className={`min-w-0 px-5 py-5 transition-all duration-300 ${editorOpen ? 'calc-offset' : ''}`} style={editorOpen ? { marginRight: '320px' } : {}}>
         <section className="sticky top-0 z-[80] mb-0 flex flex-wrap items-center gap-2 rounded-t-md border border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-600 shadow-sm backdrop-blur">
         <span className="font-semibold text-slate-900">Data</span>
         <span className="max-w-full truncate tabular-nums">{sourceName}</span>
@@ -216,7 +216,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </main>
+    </main>
     </>
   )
 }
