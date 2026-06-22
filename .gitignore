@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+*.tsbuildinfo
+
+# Personal budget data (kept out of the repo; supply your own locally).
+public/lab-budget.json
+public/budget_events.yaml
