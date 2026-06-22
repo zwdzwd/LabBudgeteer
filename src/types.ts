@@ -18,7 +18,7 @@ export type SalaryRate = {
 export type Grant = {
   id: string
   name: string
-  grtNumber?: string // institutional award/tracking number, e.g. "GRT-00002468"
+  grtNumber?: string // institutional award/tracking number, e.g. "GRT-00000000"
   sponsor?: string
   accountType?: 'flexible' | 'regular' | 'supplemental'
   nextReportMonth?: string // "YYYY-MM"
