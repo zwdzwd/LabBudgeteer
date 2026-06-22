@@ -99,11 +99,13 @@ function EventLine({ event }: { event: any }) {
       )}
 
       {/* Custom Tooltip */}
-      {showTooltip && (
-        <div className="absolute left-0 top-full mt-1 z-50 pointer-events-none">
-          <EventTooltip event={event} />
-        </div>
-      )}
+      <div
+        className={`absolute left-0 top-full mt-1 z-50 pointer-events-none transition-opacity duration-100 ${
+          showTooltip ? 'opacity-100' : 'opacity-0 invisible'
+        }`}
+      >
+        <EventTooltip event={event} />
+      </div>
     </div>
   )
 }
