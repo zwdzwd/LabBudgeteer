@@ -76,7 +76,7 @@ export function EffortCharts({
       {visiblePeople.length === 0 ? (
         <p className="text-sm text-slate-400">No effort allocated in {year}.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4 2xl:grid-cols-8">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">
           {visiblePeople.map((person) => (
             <PersonEffortChart
               key={person.id}
