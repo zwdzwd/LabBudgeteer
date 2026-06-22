@@ -154,6 +154,247 @@ export function parseImportedYAML(text: string): AppData {
   return compileEvents(result.data)
 }
 
+/** Parse + validate imported TXT (pipe-delimited). Throws with a friendly message on failure. */
+export function parseImportedTXT(text: string): AppData {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+
+  if (lines.length < 2) throw new Error('File is too short.')
+
+  let schemaVersion = 8
+  let settings: z.infer<typeof settingsSchema> = {}
+  let eventStartIdx = 0
+
+  // Parse metadata
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('schemaVersion:')) {
+      schemaVersion = parseInt(line.split(':')[1].trim())
+      eventStartIdx = i + 1
+    } else if (line.startsWith('settings:')) {
+      const settingsStr = line.split(':').slice(1).join(':').trim()
+      const pairs = settingsStr.split(' ')
+      for (const pair of pairs) {
+        const [k, v] = pair.split('=')
+        if (k === 'startMonth' || k === 'endMonth') {
+          settings[k] = v
+        }
+      }
+      eventStartIdx = i + 1
+    } else if (line.startsWith('month |')) {
+      eventStartIdx = i + 1
+      break
+    }
+  }
+
+  if (schemaVersion > SCHEMA_VERSION) {
+    throw new Error(
+      `Event file is from a newer version (v${schemaVersion}). Please update the app.`,
+    )
+  }
+
+  // Parse events
+  const events: Record<string, unknown>[] = []
+  for (let i = eventStartIdx; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line.trim()) continue
+
+    const parts = line.split('|').map(p => p.trim())
+    if (parts.length < 5) continue
+
+    const event: Record<string, unknown> = {
+      month: parts[0],
+      type: parts[1],
+    }
+
+    if (parts[2]) event.grantId = parts[2]
+    if (parts[3]) event.personId = parts[3]
+
+    // Parse details (key:value pairs)
+    const detailsStr = parts.slice(4).join('|').trim()
+    const detailPairs = parseDetailsPairs(detailsStr)
+    Object.assign(event, detailPairs)
+
+    events.push(event)
+  }
+
+  const eventFile: EventFile = { schemaVersion, settings, events: events as any }
+  const result = eventFileSchema.safeParse(eventFile)
+  if (!result.success) {
+    console.error('Validation errors:', result.error.errors)
+    throw new Error('File events do not match schema.')
+  }
+
+  return compileEvents(result.data)
+}
+
+function parseDetailsPairs(detailsStr: string): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < detailsStr.length; i++) {
+    const char = detailsStr[i]
+    if (char === '"') {
+      inQuotes = !inQuotes
+      current += char
+    } else if (char === ' ' && !inQuotes) {
+      if (current) {
+        const [k, v] = current.split(':')
+        if (k && v) result[k] = parseValue(v)
+        current = ''
+      }
+    } else {
+      current += char
+    }
+  }
+
+  if (current) {
+    const [k, v] = current.split(':')
+    if (k && v) result[k] = parseValue(v)
+  }
+
+  return result
+}
+
+function parseValue(val: string): unknown {
+  const trimmed = val.trim()
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1)
+  }
+  if (!isNaN(Number(trimmed))) {
+    return Number(trimmed)
+  }
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+  return trimmed
+}
+
+/** Convert AppData + events back to TXT format for export. */
+export function exportEventsTXT(
+  appData: AppData,
+  startMonth?: string,
+  endMonth?: string,
+): string {
+  const lines: string[] = []
+
+  // Metadata
+  lines.push(`schemaVersion: ${appData.schemaVersion}`)
+  if (appData.settings.startMonth || appData.settings.endMonth || startMonth || endMonth) {
+    const settings = []
+    if (appData.settings.startMonth || startMonth) settings.push(`startMonth=${startMonth || appData.settings.startMonth}`)
+    if (appData.settings.endMonth || endMonth) settings.push(`endMonth=${endMonth || appData.settings.endMonth}`)
+    lines.push(`settings: ${settings.join(' ')}`)
+  }
+  lines.push('')
+
+  // Reconstruct events from appData
+  const eventMap = new Map<string, any>()
+
+  // Add salary rates
+  for (const sr of appData.salaryRates) {
+    const key = `${sr.month}|salary_rate|${sr.personId}`
+    eventMap.set(key, {
+      month: sr.month,
+      type: 'salary_rate',
+      personId: sr.personId,
+      annualSalary: sr.annualSalary,
+    })
+  }
+
+  // Add grants
+  for (const grant of appData.grants) {
+    const startKey = `${grant.startMonth}|start_grant|${grant.id}`
+    const startEvent: any = {
+      month: grant.startMonth,
+      type: 'start_grant',
+      grantId: grant.id,
+      name: grant.name,
+    }
+    if (grant.accountType) startEvent.accountType = grant.accountType
+    if (grant.sponsor) startEvent.sponsor = grant.sponsor
+    if (grant.nextReportMonth) startEvent.nextReportMonth = grant.nextReportMonth
+    if (grant.info) startEvent.info = grant.info
+    if (grant.budget) startEvent.budget = grant.budget
+    if (grant.budgetStartMonth) startEvent.budgetStartMonth = grant.budgetStartMonth
+    eventMap.set(startKey, startEvent)
+
+    if (grant.endMonth) {
+      const endKey = `${grant.endMonth}|end_grant|${grant.id}`
+      eventMap.set(endKey, {
+        month: grant.endMonth,
+        type: 'end_grant',
+        grantId: grant.id,
+        name: grant.name,
+      })
+    }
+  }
+
+  // Add allocations
+  for (const alloc of appData.allocations) {
+    const key = `${alloc.month}|cover_person|${alloc.grantId}|${alloc.personId}`
+    eventMap.set(key, {
+      month: alloc.month,
+      type: 'cover_person',
+      grantId: alloc.grantId,
+      personId: alloc.personId,
+      effort: alloc.effort,
+    })
+  }
+
+  // Add expenses
+  for (const exp of appData.expenses) {
+    const key = `${exp.month}|one_off_expenditure|${exp.grantId}|${exp.id}`
+    eventMap.set(key, {
+      month: exp.month,
+      type: 'one_off_expenditure',
+      grantId: exp.grantId,
+      amount: exp.amount,
+      description: exp.description,
+    })
+  }
+
+  // Add balance resets
+  for (const reset of appData.balanceResets) {
+    const key = `${reset.month}|grant_renew|${reset.grantId}|${reset.id}`
+    eventMap.set(key, {
+      month: reset.month,
+      type: 'grant_renew',
+      grantId: reset.grantId,
+      amount: reset.operation === 'reset' ? reset.amount : (reset.operation === 'add' ? `+${reset.amount}` : `-${reset.amount}`),
+      renewalId: reset.id,
+      description: reset.description,
+    })
+  }
+
+  // Header
+  lines.push('month | type | grantId | personId | details')
+
+  // Sort and output events
+  const sorted = Array.from(eventMap.values()).sort((a, b) => {
+    const monthCmp = a.month.localeCompare(b.month)
+    if (monthCmp !== 0) return monthCmp
+    return a.type.localeCompare(b.type)
+  })
+
+  for (const event of sorted) {
+    const month = event.month
+    const type = event.type
+    const grantId = event.grantId || ''
+    const personId = event.personId || ''
+
+    const details: string[] = []
+    for (const [k, v] of Object.entries(event)) {
+      if (['month', 'type', 'grantId', 'personId'].includes(k)) continue
+      const val = typeof v === 'string' && (v.includes(' ') || v.includes(':')) ? `"${v}"` : v
+      details.push(`${k}:${val}`)
+    }
+
+    lines.push(`${month} | ${type} | ${grantId} | ${personId} | ${details.join(' ')}`)
+  }
+
+  return lines.join('\n')
+}
+
 function compileEvents(file: EventFile): AppData {
   const people = new Map<string, Person>()
   const personNameToId = new Map<string, string>()
