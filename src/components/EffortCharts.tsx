@@ -62,7 +62,7 @@ export function EffortCharts({
   }, [allocations, orderedPeople, selectedGrantId, year])
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2">
       <div>
         <h2 className="font-semibold">Effort allocation</h2>
       </div>
@@ -70,7 +70,7 @@ export function EffortCharts({
       {visiblePeople.length === 0 ? (
         <p className="text-sm text-slate-400">No effort allocated in {year}.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1">
           {visiblePeople.map((person, index) => (
             <PersonEffortChart
               key={person.id}
@@ -174,30 +174,30 @@ function PersonEffortChart({
     : null
 
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-2">
-      <div className="mb-1 flex items-baseline justify-between gap-2 px-1">
-        <h3 className="font-semibold">{person.name}</h3>
-        <div className="flex shrink-0 items-center gap-2 text-[10px] tabular-nums text-slate-400">
-          {hoveredMonthName && (
+    <section className="rounded-md border border-slate-200 bg-white p-1.5">
+      <div className="relative mb-0.5 flex items-baseline px-1">
+        <h3 className="text-[11px] font-semibold text-slate-700">{person.name}</h3>
+        {hoveredMonthName && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 text-[10px] tabular-nums text-slate-400">
             <span className="text-slate-400">{hoveredMonthName}</span>
-          )}
-          {hoveredItems.map(({ grant, effort }) => (
-            <span key={grant.id} className="flex items-center gap-0.5">
-              <span
-                className="inline-block h-1.5 w-1.5 shrink-0 rounded-sm"
-                style={{ background: grant.color ?? '#2563eb' }}
-              />
-              {round(effort)}%
-            </span>
-          ))}
-        </div>
+            {hoveredItems.map(({ grant, effort }) => (
+              <span key={grant.id} className="flex items-center gap-0.5">
+                <span
+                  className="inline-block h-1.5 w-1.5 shrink-0 rounded-sm"
+                  style={{ background: grant.color ?? '#2563eb' }}
+                />
+                {round(effort)}%
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      <div style={{ width: '100%', height: 130 }}>
+      <div style={{ width: '100%', height: 64 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
             syncId="budget-month"
-            margin={{ top: showXAxisLabels ? 24 : 8, right: 24, bottom: 4, left: 48 }}
+            margin={{ top: 4, right: 24, bottom: 4, left: 48 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
@@ -208,7 +208,7 @@ function PersonEffortChart({
               tick={showXAxisLabels ? { fill: '#64748b', fontSize: 9 } : false}
               axisLine={showXAxisLabels}
               tickLine={showXAxisLabels}
-              height={showXAxisLabels ? 18 : 0}
+              height={16}
               interval={0}
               tickFormatter={(label) => MONTH_ABBR[Number(label) - 1] ?? label}
             />
