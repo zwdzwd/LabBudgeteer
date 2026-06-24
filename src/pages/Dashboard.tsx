@@ -177,7 +177,7 @@ export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
                       setShowYearPicker(false)
                     }}
                     className={`block w-full rounded px-2 py-1 text-left tabular-nums hover:bg-slate-100 ${
-                      year === chartYear ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-600'
+                      year === chartYear ? 'bg-slate-200 font-semibold text-slate-900' : 'text-slate-600'
                     }`}
                   >
                     {year}
@@ -241,7 +241,7 @@ export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
                           aria-pressed={selected}
                           className={`w-full rounded-md border px-2 py-1.5 text-left transition ${
                             selected
-                              ? 'border-slate-500 bg-slate-100 shadow-sm'
+                              ? 'border-slate-500 bg-slate-200 shadow-sm'
                               : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                           }`}
                         >

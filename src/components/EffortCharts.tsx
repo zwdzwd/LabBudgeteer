@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -46,7 +46,9 @@ export function EffortCharts({
     [grants, selectedGrantId],
   )
 
-  const visiblePeople = useMemo(() => {
+  // People with any effort in the selected year/grant — the candidates the
+  // filter chips toggle. Default is to show all of them.
+  const peopleThisYear = useMemo(() => {
     const yearPrefix = `${year}-`
     const active = new Set<string>()
     for (const allocation of allocations) {
@@ -61,17 +63,74 @@ export function EffortCharts({
     return orderedPeople.filter((person) => active.has(person.id))
   }, [allocations, orderedPeople, selectedGrantId, year])
 
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set())
+  const togglePerson = useCallback((id: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const shownPeople = useMemo(
+    () => peopleThisYear.filter((person) => !hiddenIds.has(person.id)),
+    [peopleThisYear, hiddenIds],
+  )
+
   return (
     <section className="space-y-2">
-      <div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="font-semibold">Effort allocation</h2>
+        {peopleThisYear.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1">
+            {peopleThisYear.map((person) => {
+              const shown = !hiddenIds.has(person.id)
+              return (
+                <button
+                  key={person.id}
+                  type="button"
+                  onClick={() => togglePerson(person.id)}
+                  aria-pressed={shown}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] font-medium transition ${
+                    shown
+                      ? 'border-slate-400 bg-slate-200 text-slate-800 hover:bg-slate-300'
+                      : 'border-slate-200 bg-white text-slate-300 hover:text-slate-500'
+                  }`}
+                >
+                  {person.name}
+                </button>
+              )
+            })}
+            {hiddenIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setHiddenIds(new Set())}
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:underline"
+              >
+                Show all
+              </button>
+            )}
+            {shownPeople.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setHiddenIds(new Set(peopleThisYear.map((person) => person.id)))}
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:underline"
+              >
+                Hide all
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {visiblePeople.length === 0 ? (
+      {peopleThisYear.length === 0 ? (
         <p className="text-sm text-slate-400">No effort allocated in {year}.</p>
+      ) : shownPeople.length === 0 ? (
+        <p className="text-sm text-slate-400">All people hidden — select someone above.</p>
       ) : (
         <div className="space-y-1">
-          {visiblePeople.map((person, index) => (
+          {shownPeople.map((person) => (
             <PersonEffortChart
               key={person.id}
               person={person}
@@ -80,7 +139,6 @@ export function EffortCharts({
               allocMap={allocMap}
               months={windowMonths}
               selectedGrantId={selectedGrantId}
-              showXAxisLabels={index === 0}
               hoveredLabel={hoveredLabel}
               onHoverLabel={onHoverLabel}
             />
@@ -107,7 +165,6 @@ function PersonEffortChart({
   allocMap,
   months,
   selectedGrantId,
-  showXAxisLabels,
   hoveredLabel,
   onHoverLabel,
 }: {
@@ -117,7 +174,6 @@ function PersonEffortChart({
   allocMap: ReturnType<typeof buildAllocMap>
   months: string[]
   selectedGrantId: string | null
-  showXAxisLabels: boolean
   hoveredLabel: string | null
   onHoverLabel: (label: string | null) => void
 }) {
@@ -175,43 +231,35 @@ function PersonEffortChart({
 
   return (
     <section className="rounded-md border border-slate-200 bg-white p-1.5">
-      <div className="relative mb-0.5 flex items-baseline px-1">
-        <h3 className="text-[11px] font-semibold text-slate-700">{person.name}</h3>
+      <div className="flex items-baseline gap-2 px-1">
+        <h3 className="shrink-0 text-[11px] font-semibold text-slate-700">{person.name}</h3>
         {hoveredMonthName && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 text-[10px] tabular-nums text-slate-400">
+          <div className="pointer-events-none flex min-w-0 items-center gap-2 overflow-hidden text-[10px] tabular-nums text-slate-400">
             <span className="text-slate-400">{hoveredMonthName}</span>
             {hoveredItems.map(({ grant, effort }) => (
-              <span key={grant.id} className="flex items-center gap-0.5">
+              <span key={grant.id} className="flex shrink-0 items-center gap-0.5">
                 <span
                   className="inline-block h-1.5 w-1.5 shrink-0 rounded-sm"
                   style={{ background: grant.color ?? '#2563eb' }}
                 />
+                <span className="max-w-[7rem] truncate text-slate-500">{grant.name}</span>
                 {round(effort)}%
               </span>
             ))}
           </div>
         )}
       </div>
-      <div style={{ width: '100%', height: 64 }}>
+      <div style={{ width: '100%', height: 46 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
             syncId="budget-month"
-            margin={{ top: 4, right: 24, bottom: 4, left: 48 }}
+            margin={{ top: 2, right: 24, bottom: 4, left: 48 }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
           >
             <CartesianGrid stroke="#e2e8f0" vertical={false} />
-            <XAxis
-              dataKey="label"
-              orientation="top"
-              tick={showXAxisLabels ? { fill: '#64748b', fontSize: 9 } : false}
-              axisLine={showXAxisLabels}
-              tickLine={showXAxisLabels}
-              height={16}
-              interval={0}
-              tickFormatter={(label) => MONTH_ABBR[Number(label) - 1] ?? label}
-            />
+            <XAxis dataKey="label" hide />
             <YAxis
               tick={{ fill: '#64748b', fontSize: 10 }}
               tickFormatter={(value) => `${value}%`}
