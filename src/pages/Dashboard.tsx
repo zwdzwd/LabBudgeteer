@@ -43,6 +43,7 @@ export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
 
   // Which grant's curve is isolated in the balance chart; null shows all grants.
   const [selectedGrantId, setSelectedGrantId] = useState<string | null>(null)
+  const [hoveredMonthLabel, setHoveredMonthLabel] = useState<string | null>(null)
   const [hoverSnapshot, setHoverSnapshot] = useState<HoverSnapshot | null>(null)
   // Event currently hovered in the viewer, highlighted on the balance chart.
   const [hoveredEvent, setHoveredEvent] = useState<{
@@ -281,6 +282,7 @@ export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
               onSelectedGrantChange={setSelectedGrantId}
               year={chartYear}
               highlight={hoveredEvent}
+              onHoverLabel={setHoveredMonthLabel}
             />
           )}
 
@@ -290,9 +292,10 @@ export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
               people={people}
               grants={grants}
               allocations={allocations}
-              salaryRates={salaryRates}
               year={chartYear}
               selectedGrantId={selectedGrantId}
+              hoveredLabel={hoveredMonthLabel}
+              onHoverLabel={setHoveredMonthLabel}
             />
           )}
         </div>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   Bar,
   BarChart,
@@ -10,20 +10,14 @@ import {
   YAxis,
 } from 'recharts'
 import { useStore } from '../store/useStore'
-import { currentMonth, formatMonth, monthRange } from '../lib/months'
+import { currentMonth, monthRange } from '../lib/months'
 import { buildAllocMap, getEffort, personMonthTotal } from '../lib/totals'
-import { annualSalaryAt } from '../lib/calc'
-import { money } from '../lib/format'
 
-/** X-axis tick: just the month number, e.g. "2024-10" -> "10". */
-function monthTickLabel(month: string): string {
-  return String(Number(month.slice(5)))
-}
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 type Person = ReturnType<typeof useStore.getState>['people'][number]
 type Grant = ReturnType<typeof useStore.getState>['grants'][number]
 type Allocations = ReturnType<typeof useStore.getState>['allocations']
-type SalaryRates = ReturnType<typeof useStore.getState>['salaryRates']
 
 const SENIORITY_ORDER = ['wz', 'hf', 'hx', 'cc', 'dg', 'sl']
 
@@ -31,16 +25,18 @@ export function EffortCharts({
   people,
   grants,
   allocations,
-  salaryRates,
   year,
   selectedGrantId,
+  hoveredLabel,
+  onHoverLabel,
 }: {
   people: Person[]
   grants: Grant[]
   allocations: Allocations
-  salaryRates: SalaryRates
   year: number
   selectedGrantId: string | null
+  hoveredLabel: string | null
+  onHoverLabel: (label: string | null) => void
 }) {
   const allocMap = useMemo(() => buildAllocMap(allocations), [allocations])
   const orderedPeople = useMemo(() => orderPeopleForEffort(people), [people])
@@ -50,8 +46,6 @@ export function EffortCharts({
     [grants, selectedGrantId],
   )
 
-  // Only show a person whose effort is non-zero somewhere in the visible year,
-  // so e.g. departed staff drop off once the year has no allocations for them.
   const visiblePeople = useMemo(() => {
     const yearPrefix = `${year}-`
     const active = new Set<string>()
@@ -76,17 +70,19 @@ export function EffortCharts({
       {visiblePeople.length === 0 ? (
         <p className="text-sm text-slate-400">No effort allocated in {year}.</p>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">
-          {visiblePeople.map((person) => (
+        <div className="space-y-2">
+          {visiblePeople.map((person, index) => (
             <PersonEffortChart
               key={person.id}
               person={person}
               grants={visibleGrants}
               allocations={allocations}
               allocMap={allocMap}
-              salaryRates={salaryRates}
               months={windowMonths}
               selectedGrantId={selectedGrantId}
+              showXAxisLabels={index === 0}
+              hoveredLabel={hoveredLabel}
+              onHoverLabel={onHoverLabel}
             />
           ))}
         </div>
@@ -109,17 +105,21 @@ function PersonEffortChart({
   grants,
   allocations,
   allocMap,
-  salaryRates,
   months,
   selectedGrantId,
+  showXAxisLabels,
+  hoveredLabel,
+  onHoverLabel,
 }: {
   person: Person
   grants: Grant[]
   allocations: Allocations
   allocMap: ReturnType<typeof buildAllocMap>
-  salaryRates: SalaryRates
   months: string[]
   selectedGrantId: string | null
+  showXAxisLabels: boolean
+  hoveredLabel: string | null
+  onHoverLabel: (label: string | null) => void
 }) {
   const grantsForPerson = useMemo(() => {
     const ids = new Set<string>()
@@ -134,7 +134,7 @@ function PersonEffortChart({
       months.map((month) => {
         const row: EffortRow = {
           month,
-          label: monthTickLabel(month),
+          label: String(Number(month.slice(5))),
           total:
             selectedGrantId == null
               ? personMonthTotal(allocations, person.id, month)
@@ -154,19 +154,63 @@ function PersonEffortChart({
   const currentYearMatches =
     months.length > 0 && currentMonth().slice(0, 4) === months[0].slice(0, 4)
 
+  const handleMouseMove = useCallback(
+    (state: any) => {
+      onHoverLabel(state?.isTooltipActive ? (state.activeLabel ?? null) : null)
+    },
+    [onHoverLabel],
+  )
+
+  const handleMouseLeave = useCallback(() => onHoverLabel(null), [onHoverLabel])
+
+  const hoveredRow = hoveredLabel ? chartData.find((r) => r.label === hoveredLabel) : null
+  const hoveredItems = hoveredRow
+    ? grantsForPerson
+        .map((g) => ({ grant: g, effort: hoveredRow.details[g.id] ?? 0 }))
+        .filter((item) => item.effort > 0)
+    : []
+  const hoveredMonthName = hoveredLabel
+    ? (MONTH_ABBR[Number(hoveredLabel) - 1] ?? hoveredLabel)
+    : null
+
   return (
     <section className="rounded-md border border-slate-200 bg-white p-2">
-      <div className="mb-1 px-1">
+      <div className="mb-1 flex items-baseline justify-between gap-2 px-1">
         <h3 className="font-semibold">{person.name}</h3>
+        <div className="flex shrink-0 items-center gap-2 text-[10px] tabular-nums text-slate-400">
+          {hoveredMonthName && (
+            <span className="text-slate-400">{hoveredMonthName}</span>
+          )}
+          {hoveredItems.map(({ grant, effort }) => (
+            <span key={grant.id} className="flex items-center gap-0.5">
+              <span
+                className="inline-block h-1.5 w-1.5 shrink-0 rounded-sm"
+                style={{ background: grant.color ?? '#2563eb' }}
+              />
+              {round(effort)}%
+            </span>
+          ))}
+        </div>
       </div>
-      <div style={{ width: '100%', height: 200 }}>
+      <div style={{ width: '100%', height: 130 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} syncId="budget-month" margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+          <BarChart
+            data={chartData}
+            syncId="budget-month"
+            margin={{ top: showXAxisLabels ? 24 : 8, right: 24, bottom: 4, left: 48 }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
             <CartesianGrid stroke="#e2e8f0" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              orientation="top"
+              tick={showXAxisLabels ? { fill: '#64748b', fontSize: 9 } : false}
+              axisLine={showXAxisLabels}
+              tickLine={showXAxisLabels}
+              height={showXAxisLabels ? 18 : 0}
               interval={0}
+              tickFormatter={(label) => MONTH_ABBR[Number(label) - 1] ?? label}
             />
             <YAxis
               tick={{ fill: '#64748b', fontSize: 10 }}
@@ -177,20 +221,12 @@ function PersonEffortChart({
             />
             {currentYearMatches && (
               <ReferenceLine
-                x={monthTickLabel(currentMonth())}
+                x={String(Number(currentMonth().slice(5)))}
                 stroke="#64748b"
                 strokeDasharray="3 3"
               />
             )}
-            <Tooltip
-              content={
-                <EffortTooltip
-                  grants={grantsForPerson}
-                  person={person}
-                  salaryRates={salaryRates}
-                />
-              }
-            />
+            <Tooltip cursor={{ fill: '#e2e8f0', fillOpacity: 0.6 }} content={() => null} />
             <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="4 4" />
             {grantsForPerson.map((grant) => (
               <Bar
@@ -215,60 +251,6 @@ type EffortRow = {
   total: number
   details: Record<string, number>
   [grantId: string]: string | number | Record<string, number>
-}
-
-type TooltipPayload = {
-  payload?: EffortRow
-}
-
-function EffortTooltip({
-  active,
-  payload,
-  grants,
-  person,
-  salaryRates,
-}: {
-  active?: boolean
-  payload?: TooltipPayload[]
-  grants: Grant[]
-  person: Person
-  salaryRates: SalaryRates
-}) {
-  if (!active || !payload || payload.length === 0) return null
-  const row = payload[0]?.payload
-  if (!row) return null
-  const items = grants
-    .map((grant) => ({ grant, effort: row.details[grant.id] ?? 0 }))
-    .filter((item) => item.effort > 0)
-  const annualSalary = annualSalaryAt(person, row.month, salaryRates)
-
-  return (
-    <div className="rounded-md border border-slate-200 bg-white/45 px-3 py-2 text-xs shadow-lg backdrop-blur-sm">
-      <div className="font-semibold text-slate-900">{formatMonth(row.month)}</div>
-      <div className="text-slate-500">Total: {round(row.total)}%</div>
-      <div className="mb-2 text-slate-500">
-        Salary rate: {annualSalary > 0 ? `${money(annualSalary)}/yr` : '—'}
-      </div>
-      {items.length === 0 ? (
-        <div className="text-slate-400">No effort assigned.</div>
-      ) : (
-        <ul className="space-y-0.5">
-          {items.map(({ grant, effort }) => (
-            <li key={grant.id} className="flex justify-between gap-4 tabular-nums">
-              <span className="inline-flex items-center gap-1.5 text-slate-600">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-sm"
-                  style={{ background: grant.color ?? '#2563eb' }}
-                />
-                {grant.name}
-              </span>
-              <span className="font-medium text-slate-900">{round(effort)}%</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
 }
 
 function round(n: number): number {

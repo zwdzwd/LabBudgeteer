@@ -39,6 +39,7 @@ export function GrantBalanceChart({
   onSelectedGrantChange,
   year,
   highlight,
+  onHoverLabel,
 }: {
   grants: Grant[]
   seriesByGrant: Map<string, MonthBalance[]>
@@ -51,6 +52,7 @@ export function GrantBalanceChart({
   onSelectedGrantChange: (grantId: string | null) => void
   year: number
   highlight?: { month: string; grantId?: string | null; type?: string } | null
+  onHoverLabel?: (label: string | null) => void
 }) {
   const selectedGrant = selectedGrantId
     ? (grants.find((grant) => grant.id === selectedGrantId) ?? null)
@@ -62,10 +64,11 @@ export function GrantBalanceChart({
   const windowMonths = monthRange(`${year}-01`, `${year}-12`)
   const currentYear = Number(currentMonth().slice(0, 4))
 
-  const chartData = windowMonths.map((month) => {
+  const chartData = windowMonths.map((month, i) => {
     const row: ChartRow = {
       month,
       label: monthTickLabel(month),
+      monthIndex: i + 0.5,
       remaining: {},
     }
     for (const grant of grants) {
@@ -94,7 +97,7 @@ export function GrantBalanceChart({
     const row = chartData.find((r) => r.month === highlight.month)
     const y = row?.remaining[grant.id]
     if (row == null || y == null) return null
-    return { label: row.label, y, color: eventTypeColor(highlight.type) }
+    return { label: row.label, monthIndex: row.monthIndex, y, color: eventTypeColor(highlight.type) }
   })()
 
   // The plotted line is floored at zero, so flag any grant whose true balance
@@ -125,16 +128,29 @@ export function GrantBalanceChart({
       <div className="rounded-md border border-slate-200 bg-white p-2">
         <div style={{ width: '100%', height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} syncId="budget-month" margin={{ top: 12, right: 24, bottom: 10, left: 16 }}>
+            <LineChart
+              data={chartData}
+              syncId="budget-month"
+              margin={{ top: 12, right: 24, bottom: 10, left: 16 }}
+              onMouseMove={(state: any) => {
+                if (onHoverLabel && state?.isTooltipActive && state.activeLabel != null) {
+                  onHoverLabel(String(Math.round(Number(state.activeLabel))))
+                }
+              }}
+              onMouseLeave={() => onHoverLabel?.(null)}
+            >
               <CartesianGrid stroke="#e2e8f0" vertical={false} />
               <XAxis
-                dataKey="label"
+                dataKey="monthIndex"
+                type="number"
+                domain={[0, 12]}
+                ticks={[0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5]}
+                tickFormatter={(v) => String(Math.round(v))}
                 tick={{ fill: '#64748b', fontSize: 11 }}
-                interval={0}
               />
               {currentYear === year && (
                 <ReferenceLine
-                  x={monthTickLabel(currentMonth())}
+                  x={Number(currentMonth().slice(5)) - 0.5}
                   stroke="#64748b"
                   strokeDasharray="3 3"
                 />
@@ -171,7 +187,7 @@ export function GrantBalanceChart({
               ))}
               {highlightPoint && (
                 <ReferenceDot
-                  x={highlightPoint.label}
+                  x={highlightPoint.monthIndex}
                   y={highlightPoint.y}
                   r={8}
                   stroke={highlightPoint.color}
@@ -217,6 +233,7 @@ export function GrantBalanceChart({
 type ChartRow = {
   month: string
   label: string
+  monthIndex: number
   // Remaining balance per grant id; null where a grant has no data that month.
   remaining: Record<string, number | null>
   // Only populated when a single grant is selected.
