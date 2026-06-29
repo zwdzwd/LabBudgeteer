@@ -3,6 +3,8 @@
 A private, browser-local tool for planning lab personnel effort and grant spending month by
 month. All computation happens in your browser; no budget data is uploaded to a server.
 
+**Live app:** https://zwdzwd.github.io/LabBudgeteer/
+
 ## What it does
 
 A single dashboard shows, top to bottom:
