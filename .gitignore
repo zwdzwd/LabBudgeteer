@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-single
 dist-ssr
 *.local
 .DS_Store
@@ -9,3 +10,4 @@ dist-ssr
 # Personal budget data (kept out of the repo; supply your own locally).
 public/lab-budget.json
 public/budget_events.yaml
+public/budget_events.local.txt

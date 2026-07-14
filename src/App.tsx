@@ -4,14 +4,34 @@ import { useStore } from './store/useStore'
 import { parseImportedYAML, parseImportedTXTWithEvents } from './lib/io'
 import { Dashboard } from './pages/Dashboard'
 
-const DEFAULT_SOURCE = `${import.meta.env.BASE_URL}budget_events.txt`
+declare global {
+  interface Window {
+    // Set by the single-file build (vite.config.single.ts), which bakes the
+    // event text into the HTML so it works from file:// without a server.
+    __EMBEDDED_BUDGET_EVENTS__?: string
+  }
+}
 
-// Read-only simulator seed. Provide your own public/budget_events.txt (gitignored);
-// in local development it is typically a symlink to your canonical event file.
-async function loadDefaultBudgetEvents(): Promise<string> {
-  const res = await fetch(DEFAULT_SOURCE, { cache: 'no-store' })
-  if (!res.ok) throw new Error(`Could not load budget_events.txt (${res.status}).`)
-  return res.text()
+// Local-first simulator seed: budget_events.local.txt is gitignored (point it at
+// your canonical event file, e.g. via a symlink) and wins when present; the
+// committed budget_events.txt is the demo fallback served on the public site.
+const SEED_SOURCES = [
+  { url: `${import.meta.env.BASE_URL}budget_events.local.txt`, label: 'public/budget_events.local.txt' },
+  { url: `${import.meta.env.BASE_URL}budget_events.txt`, label: 'public/budget_events.txt' },
+] as const
+
+async function loadDefaultBudgetEvents(): Promise<{ text: string; label: string }> {
+  const embedded = window.__EMBEDDED_BUDGET_EVENTS__
+  if (embedded) return { text: embedded, label: 'embedded budget_events.txt' }
+  for (const { url, label } of SEED_SOURCES) {
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) continue
+    const text = await res.text()
+    // Dev/preview servers answer missing files with the SPA index.html; skip those.
+    if (text.trimStart().startsWith('<')) continue
+    return { text, label }
+  }
+  throw new Error('Could not load budget_events.local.txt or budget_events.txt.')
 }
 
 function applyBudgetEvents(text: string, filename: string): void {
@@ -42,6 +62,17 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const fileHandleRef = useRef<FileSystemFileHandle | null>(null)
   const fileSignatureRef = useRef<string | null>(null)
+
+  async function loadDefaultSource(): Promise<void> {
+    try {
+      const { text, label } = await loadDefaultBudgetEvents()
+      await loadText(label, async () => text)
+    } catch (e) {
+      console.error(e)
+      setStatus('Load failed')
+      setError(e instanceof Error ? e.message : 'Could not load file.')
+    }
+  }
 
   async function loadText(label: string, readText: () => Promise<string>): Promise<void> {
     try {
@@ -113,11 +144,11 @@ export default function App() {
       }
       return
     }
-    await loadText('public/budget_events.txt', loadDefaultBudgetEvents)
+    await loadDefaultSource()
   }
 
   useEffect(() => {
-    void loadText('public/budget_events.txt', loadDefaultBudgetEvents)
+    void loadDefaultSource()
   }, [])
 
   useEffect(() => {

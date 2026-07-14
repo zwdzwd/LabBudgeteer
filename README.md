@@ -16,13 +16,15 @@ A single dashboard shows, top to bottom:
 
 ## Your data is a read-only event file
 
-The source of truth is a human- and AI-readable text file on your own disk. The app loads
-`public/budget_events.txt` on startup and treats the browser UI as a read-only simulator.
-Edit the file in an editor, then refresh the page or use the in-page reload controls.
+The source of truth is a human- and AI-readable text file on your own disk. On startup the app
+first tries `public/budget_events.local.txt` and, when that is absent, falls back to
+`public/budget_events.txt`; the browser UI is a read-only simulator. Edit the file in an
+editor, then refresh the page or use the in-page reload controls.
 
-The app reads `public/budget_events.txt`. That path is gitignored, so your real data is never
-committed: point it at your own file by copying or symlinking your canonical event file there,
-e.g. `ln -s /path/to/your/budget_events.txt public/budget_events.txt`.
+`public/budget_events.local.txt` is gitignored, so your real data is never committed: point it
+at your own file by copying or symlinking your canonical event file there, e.g.
+`ln -s /path/to/your/budget_events.txt public/budget_events.local.txt`. The committed
+`public/budget_events.txt` holds only the non-sensitive demo sample that the public site loads.
 
 You can also click **Open** in the page header to load a different local file for the
 current browser session. In browsers that support the File System Access API, the app keeps the
@@ -74,8 +76,10 @@ month | type | details
 ## Privacy
 
 - No network calls carry your data; everything runs client-side.
-- The event file lives only where you put it. `public/budget_events.txt` is gitignored, so it is
-  never committed or published.
+- The event file lives only where you put it. `public/budget_events.local.txt` is gitignored,
+  so it is never committed or published. Note that a local `npm run build` copies `public/`
+  (following symlinks) into `dist/`, so keep local build output private; the deployed site is
+  built on CI, where the gitignored file does not exist.
 - When you open a local file from the page, the browser grants access only to that selected
   file for the current session.
 
@@ -87,6 +91,14 @@ npm run dev      # http://localhost:5173
 npm run build    # type-check + production build to dist/
 ```
 
+## Serverless snapshot
+
+`npm run build:single` produces `dist-single/index.html`, a single self-contained file with the
+app and the current event data (from `budget_events.local.txt` when present, else the demo)
+baked in. Open it directly from disk — no server needed. It is a snapshot: regenerate after
+editing the event file. `dist-single/` is gitignored because the file embeds your real data;
+treat it as confidential and do not share or publish it.
+
 ## Deploy
 
 Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds and publishes to
@@ -94,9 +106,9 @@ GitHub Pages. Enable Pages once in repo **Settings -> Pages -> Source: GitHub Ac
 The app expects to be served under `/LabBudgeteer/` (see `base` in `vite.config.ts`); adjust
 if your repo name differs.
 
-Because `public/budget_events.txt` is gitignored, the deployed site loads no data by default
-(it shows the empty state). To publish a working demo, commit a non-sensitive sample file at
-that path; to keep budgets private, leave it out and run the app locally only.
+Because `public/budget_events.local.txt` is gitignored, the deployed site never sees your real
+data; it loads the committed demo sample at `public/budget_events.txt`. To publish no demo at
+all, delete that sample and the site shows the empty state.
 
 ## Stack
 
