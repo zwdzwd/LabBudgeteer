@@ -10,7 +10,9 @@ import {
   YAxis,
 } from 'recharts'
 import { useStore } from '../store/useStore'
-import { currentMonth, monthRange } from '../lib/months'
+import { annualSalaryAt } from '../lib/calc'
+import { money } from '../lib/format'
+import { currentMonth, formatMonth, monthRange, monthToIndex } from '../lib/months'
 import { buildAllocMap, getEffort, personMonthTotal } from '../lib/totals'
 import { EffortRangeSummary } from './EffortRangeSummary'
 
@@ -19,6 +21,7 @@ const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct',
 type Person = ReturnType<typeof useStore.getState>['people'][number]
 type Grant = ReturnType<typeof useStore.getState>['grants'][number]
 type Allocations = ReturnType<typeof useStore.getState>['allocations']
+type SalaryRates = ReturnType<typeof useStore.getState>['salaryRates']
 
 const SENIORITY_ORDER = ['wz', 'hf', 'hx', 'cc', 'dg', 'sl']
 
@@ -26,6 +29,7 @@ export function EffortCharts({
   people,
   grants,
   allocations,
+  salaryRates,
   year,
   selectedGrantId,
   hoveredLabel,
@@ -34,6 +38,7 @@ export function EffortCharts({
   people: Person[]
   grants: Grant[]
   allocations: Allocations
+  salaryRates: SalaryRates
   year: number
   selectedGrantId: string | null
   hoveredLabel: string | null
@@ -82,6 +87,14 @@ export function EffortCharts({
 
   return (
     <section className="space-y-2">
+      {shownPeople.length > 0 && (
+        <SalaryRateLine
+          people={shownPeople}
+          months={windowMonths}
+          salaryRates={salaryRates}
+          hoveredLabel={hoveredLabel}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="font-semibold">Effort allocation</h2>
         <button
@@ -94,7 +107,7 @@ export function EffortCharts({
               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          Person-months
+          Sum calculator
         </button>
         {peopleThisYear.length > 1 && (
           <div className="flex flex-wrap items-center gap-1">
@@ -170,6 +183,62 @@ export function EffortCharts({
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * Single text line above the effort charts: each shown person's annualized
+ * salary rate (independent of effort allocation). Follows the month hovered
+ * in the charts below; otherwise shows the current month, clamped to the
+ * visible year. A person drops out at their termination month.
+ */
+function SalaryRateLine({
+  people,
+  months,
+  salaryRates,
+  hoveredLabel,
+}: {
+  people: Person[]
+  months: string[]
+  salaryRates: SalaryRates
+  hoveredLabel: string | null
+}) {
+  const month = useMemo(() => {
+    if (hoveredLabel) {
+      const match = months.find((m) => String(Number(m.slice(5))) === hoveredLabel)
+      if (match) return match
+    }
+    const current = currentMonth()
+    if (months.includes(current)) return current
+    return monthToIndex(current) < monthToIndex(months[0]) ? months[0] : months[months.length - 1]
+  }, [hoveredLabel, months])
+
+  const rates = useMemo(
+    () =>
+      people
+        .filter(
+          (person) =>
+            !person.terminationMonth ||
+            monthToIndex(month) < monthToIndex(person.terminationMonth),
+        )
+        .map((person) => ({ person, salary: annualSalaryAt(person, month, salaryRates) }))
+        .filter((rate) => rate.salary > 0),
+    [month, people, salaryRates],
+  )
+
+  if (rates.length === 0) return null
+
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-white px-2 py-1.5">
+      <h3 className="text-[11px] font-semibold text-slate-700">Annualized salary rate</h3>
+      <span className="text-[10px] tabular-nums text-slate-400">{formatMonth(month)}</span>
+      {rates.map(({ person, salary }) => (
+        <span key={person.id} className="text-[10px] tabular-nums text-slate-500">
+          {person.name}{' '}
+          <span className="font-semibold text-slate-600">{money(salary)}/yr</span>
+        </span>
+      ))}
+    </div>
   )
 }
 

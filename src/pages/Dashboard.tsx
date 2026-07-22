@@ -292,6 +292,7 @@ export function Dashboard({ showEvents = false }: { showEvents?: boolean }) {
               people={people}
               grants={grants}
               allocations={allocations}
+              salaryRates={salaryRates}
               year={chartYear}
               selectedGrantId={selectedGrantId}
               hoveredLabel={hoveredMonthLabel}

@@ -27,17 +27,17 @@ export function EffortRangeSummary({
   const [end, setEnd] = useState(`${year}-12`)
 
   // Prefill ranges relative to the chart year: fiscal year (Jul-Jun), academic
-  // year (Sep-Aug), fiscal quarters, and calendar year.
+  // year (Sep-Aug), calendar year, and calendar quarters.
   const presets = useMemo(() => {
     const yy = String(year).slice(2)
     return [
       { label: `FY${yy}`, start: `${year - 1}-07`, end: `${year}-06` },
       { label: `AY${yy}`, start: `${year - 1}-09`, end: `${year}-08` },
-      { label: 'Q1', start: `${year - 1}-07`, end: `${year - 1}-09` },
-      { label: 'Q2', start: `${year - 1}-10`, end: `${year - 1}-12` },
-      { label: 'Q3', start: `${year}-01`, end: `${year}-03` },
-      { label: 'Q4', start: `${year}-04`, end: `${year}-06` },
       { label: `CY${yy}`, start: `${year}-01`, end: `${year}-12` },
+      { label: 'Q1', start: `${year}-01`, end: `${year}-03` },
+      { label: 'Q2', start: `${year}-04`, end: `${year}-06` },
+      { label: 'Q3', start: `${year}-07`, end: `${year}-09` },
+      { label: 'Q4', start: `${year}-10`, end: `${year}-12` },
     ]
   }, [year])
 
