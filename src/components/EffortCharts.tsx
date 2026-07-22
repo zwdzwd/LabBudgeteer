@@ -12,6 +12,7 @@ import {
 import { useStore } from '../store/useStore'
 import { currentMonth, monthRange } from '../lib/months'
 import { buildAllocMap, getEffort, personMonthTotal } from '../lib/totals'
+import { EffortRangeSummary } from './EffortRangeSummary'
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -63,6 +64,7 @@ export function EffortCharts({
     return orderedPeople.filter((person) => active.has(person.id))
   }, [allocations, orderedPeople, selectedGrantId, year])
 
+  const [rangeOpen, setRangeOpen] = useState(false)
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set())
   const togglePerson = useCallback((id: string) => {
     setHiddenIds((prev) => {
@@ -82,6 +84,18 @@ export function EffortCharts({
     <section className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="font-semibold">Effort allocation</h2>
+        <button
+          type="button"
+          onClick={() => setRangeOpen((open) => !open)}
+          aria-pressed={rangeOpen}
+          className={`rounded border px-1.5 py-0.5 text-[10px] font-medium transition ${
+            rangeOpen
+              ? 'border-slate-900 bg-slate-900 text-white'
+              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          Person-months
+        </button>
         {peopleThisYear.length > 1 && (
           <div className="flex flex-wrap items-center gap-1">
             {peopleThisYear.map((person) => {
@@ -123,6 +137,16 @@ export function EffortCharts({
           </div>
         )}
       </div>
+
+      {rangeOpen && (
+        <EffortRangeSummary
+          people={orderedPeople}
+          grants={grants}
+          allocations={allocations}
+          selectedGrantId={selectedGrantId}
+          year={year}
+        />
+      )}
 
       {peopleThisYear.length === 0 ? (
         <p className="text-sm text-slate-400">No effort allocated in {year}.</p>
