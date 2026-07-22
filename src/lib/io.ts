@@ -158,7 +158,18 @@ export function parseImportedYAML(text: string): AppData {
 
 /** Parse + validate imported TXT (pipe-delimited). Throws with a friendly message on failure. */
 export function parseImportedTXT(text: string): AppData {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+  // Keep each surviving line's index in the ORIGINAL text so events can be
+  // mapped back to their source lines for in-place editing.
+  const rawLines = text.split('\n')
+  const lines: string[] = []
+  const sourceIdx: number[] = []
+  rawLines.forEach((raw, i) => {
+    const trimmed = raw.trim()
+    if (trimmed && !trimmed.startsWith('#')) {
+      lines.push(trimmed)
+      sourceIdx.push(i)
+    }
+  })
 
   if (lines.length < 2) throw new Error('File is too short.')
 
@@ -196,6 +207,7 @@ export function parseImportedTXT(text: string): AppData {
 
   // Parse events
   const events: Record<string, unknown>[] = []
+  const lineNumbers: number[] = []
   for (let i = eventStartIdx; i < lines.length; i++) {
     const line = lines[i]
     if (!line.trim()) continue
@@ -214,10 +226,12 @@ export function parseImportedTXT(text: string): AppData {
     Object.assign(event, parseDetailsPairs(detailsStr))
 
     events.push(event)
+    lineNumbers.push(sourceIdx[i])
   }
 
   // Keep raw events for editing
   lastParsedEvents = events
+  lastParsedLineNumbers = lineNumbers
 
   const eventFile: EventFile = { schemaVersion, settings, events: events as any }
   const result = eventFileSchema.safeParse(eventFile)
@@ -227,6 +241,19 @@ export function parseImportedTXT(text: string): AppData {
   }
 
   return compileEvents(result.data)
+}
+
+/**
+ * Parse one "month | type | key:value ..." line into an event object, the
+ * same way parseImportedTXT does. Returns null when the line has no
+ * month/type. Used by the form editor to switch from raw back to fields.
+ */
+export function parseEventLine(line: string): Record<string, any> | null {
+  const parts = line.split('|').map(p => p.trim())
+  if (parts.length < 2 || !parts[0] || !parts[1]) return null
+  const event: Record<string, unknown> = { month: parts[0], type: parts[1] }
+  Object.assign(event, parseDetailsPairs(parts.slice(2).join('|').trim()))
+  return event
 }
 
 function parseDetailsPairs(detailsStr: string): Record<string, unknown> {
@@ -747,16 +774,22 @@ function appendUniqueMonth(months: string[] | undefined, month: string): string[
   return [...next].sort()
 }
 
-// Store raw events for the editor
+// Store raw events (and their source line numbers) for the editor
 let lastParsedEvents: Record<string, any>[] = []
+let lastParsedLineNumbers: number[] = []
 
 export function getLastParsedEvents(): Record<string, any>[] {
   return lastParsedEvents
 }
 
 /** Parse TXT and keep track of raw events for editing. */
-export function parseImportedTXTWithEvents(text: string): { appData: AppData; events: Record<string, any>[] } {
+export function parseImportedTXTWithEvents(text: string): {
+  appData: AppData
+  events: Record<string, any>[]
+  lineNumbers: number[]
+} {
   const appData = parseImportedTXT(text)
   const events = [...lastParsedEvents]
-  return { appData, events }
+  const lineNumbers = [...lastParsedLineNumbers]
+  return { appData, events, lineNumbers }
 }

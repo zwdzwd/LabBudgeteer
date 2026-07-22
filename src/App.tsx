@@ -34,11 +34,9 @@ async function loadDefaultBudgetEvents(): Promise<{ text: string; label: string 
   throw new Error('Could not load budget_events.local.txt or budget_events.txt.')
 }
 
-// Verbatim text of the most recently loaded event file, for the Export button.
-let loadedEventText = ''
-
+// Download the current event text (including any in-page edits) verbatim.
 function exportBudgetEvents(): void {
-  const blob = new Blob([loadedEventText], { type: 'text/plain' })
+  const blob = new Blob([useStore.getState().sourceText], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -48,21 +46,15 @@ function exportBudgetEvents(): void {
 }
 
 function applyBudgetEvents(text: string, filename: string): void {
-  loadedEventText = text
   const ext = filename.toLowerCase().split('.').pop()
-  let appData
-  let rawEvents: Record<string, any>[] = []
 
   if (ext === 'txt') {
     const result = parseImportedTXTWithEvents(text)
-    appData = result.appData
-    rawEvents = result.events
+    useStore.getState().replaceAll(result.appData, result.events, result.lineNumbers, text)
   } else {
     // For YAML, we don't track raw events yet
-    appData = parseImportedYAML(text)
+    useStore.getState().replaceAll(parseImportedYAML(text), [], [], text)
   }
-
-  useStore.getState().replaceAll(appData, rawEvents)
 }
 
 export default function App() {
