@@ -34,7 +34,21 @@ async function loadDefaultBudgetEvents(): Promise<{ text: string; label: string 
   throw new Error('Could not load budget_events.local.txt or budget_events.txt.')
 }
 
+// Verbatim text of the most recently loaded event file, for the Export button.
+let loadedEventText = ''
+
+function exportBudgetEvents(): void {
+  const blob = new Blob([loadedEventText], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = 'budget_events.txt'
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 function applyBudgetEvents(text: string, filename: string): void {
+  loadedEventText = text
   const ext = filename.toLowerCase().split('.').pop()
   let appData
   let rawEvents: Record<string, any>[] = []
@@ -55,10 +69,6 @@ export default function App() {
   const [sourceName, setSourceName] = useState('public/budget_events.txt')
   const [status, setStatus] = useState('Loading...')
   const [error, setError] = useState<string | null>(null)
-  const [watchEnabled, setWatchEnabled] = useState(true)
-  const [hasFileHandle, setHasFileHandle] = useState(false)
-  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null)
-  const [editorOpen, setEditorOpen] = useState(true)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const fileHandleRef = useRef<FileSystemFileHandle | null>(null)
   const fileSignatureRef = useRef<string | null>(null)
@@ -81,7 +91,6 @@ export default function App() {
       setSourceName(label)
       setStatus('Loaded')
       setError(null)
-      setLastLoadedAt(new Date())
     } catch (e) {
       console.error(e)
       setStatus('Load failed')
@@ -97,7 +106,6 @@ export default function App() {
     setSourceName(handle.name)
     setStatus('Loaded')
     setError(null)
-    setLastLoadedAt(new Date())
   }
 
   async function chooseFile(): Promise<void> {
@@ -117,7 +125,6 @@ export default function App() {
         })
         if (!handle) return
         fileHandleRef.current = handle
-        setHasFileHandle(true)
         await loadSelectedFile(handle)
         return
       } catch (e) {
@@ -151,9 +158,8 @@ export default function App() {
     void loadDefaultSource()
   }, [])
 
+  // Auto-reload the selected file when it changes on disk (always on).
   useEffect(() => {
-    if (!watchEnabled || !fileHandleRef.current) return
-
     const interval = window.setInterval(() => {
       const handle = fileHandleRef.current
       if (!handle) return
@@ -168,7 +174,6 @@ export default function App() {
           fileSignatureRef.current = signature
           setStatus('Auto reloaded')
           setError(null)
-          setLastLoadedAt(new Date())
         })
         .catch((e) => {
           console.error(e)
@@ -178,7 +183,7 @@ export default function App() {
     }, 2000)
 
     return () => window.clearInterval(interval)
-  }, [watchEnabled])
+  }, [])
 
   return (
     <>
@@ -201,27 +206,14 @@ export default function App() {
           </button>
           <button
             type="button"
-            onClick={() => setEditorOpen(!editorOpen)}
-            className={`rounded border px-2 py-0.5 transition-colors ${
-              editorOpen
-                ? 'border-slate-900 bg-slate-900 text-white'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
+            onClick={exportBudgetEvents}
+            className="rounded border border-slate-200 px-2 py-0.5 text-slate-600 hover:bg-slate-50"
           >
-            Events
+            Export
           </button>
-          <label className="inline-flex items-center gap-1 text-slate-500">
-            <input
-              type="checkbox"
-              checked={watchEnabled}
-              disabled={!hasFileHandle}
-              onChange={(event) => setWatchEnabled(event.target.checked)}
-            />
-            Watch
-          </label>
           {error
             ? <span className="text-red-600">{error}</span>
-            : <span className="text-slate-400">{status}{lastLoadedAt ? ` ${lastLoadedAt.toLocaleTimeString()}` : ''}</span>
+            : <span className="text-slate-400">{status}</span>
           }
         </div>
         <input
@@ -233,7 +225,6 @@ export default function App() {
             const file = event.target.files?.[0]
             if (!file) return
             fileHandleRef.current = null
-            setHasFileHandle(false)
             fileSignatureRef.current = fileSignature(file)
             void loadText(file.name, () => file.text())
             event.currentTarget.value = ''
@@ -242,7 +233,7 @@ export default function App() {
       </section>
       <main className="px-5 pb-5">
         <Routes>
-          <Route path="/" element={<Dashboard showEvents={editorOpen} />} />
+          <Route path="/" element={<Dashboard showEvents />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
