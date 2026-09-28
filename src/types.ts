@@ -45,8 +45,8 @@ export type Expense = {
   description?: string
 }
 
-// A balance reset establishes a grant's ending balance for a month-end checkpoint.
-// Charges begin in the following month.
+// A balance reset adjusts a grant's opening balance for its month; that month's
+// salary and expense charges still apply.
 // operation: 'reset' sets balance to amount; 'add'/'subtract' adjusts the current balance.
 export type BalanceReset = {
   id: string

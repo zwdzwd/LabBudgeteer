@@ -120,15 +120,12 @@ export function grantBalanceSeries(
       out.push({ month: m, salary: 0, expense: 0, reset: resetEntry?.amount ?? 0, spend: 0, remaining })
       return
     }
-    if (resetEntry) {
-      out.push({ month: m, salary: 0, expense: 0, reset: resetEntry.amount, spend: 0, remaining })
-      return
-    }
+    // A renewal adjusts the opening balance; that month's charges still apply.
     const salary = grantSalaryCharge(grant, m, allocations, peopleById, salaryRates)
     const expense = grantExpenseTotal(grant.id, m, expenses)
     const spend = salary + expense
     remaining -= spend
-    out.push({ month: m, salary, expense, reset: 0, spend, remaining })
+    out.push({ month: m, salary, expense, reset: resetEntry?.amount ?? 0, spend, remaining })
   })
   return out
 }

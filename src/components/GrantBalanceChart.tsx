@@ -275,8 +275,19 @@ function ReportDot({ cx, cy, payload, grant }: ReportDotProps) {
   const color = grant.color ?? '#2563eb'
   return (
     <g>
-      <circle cx={cx} cy={cy} r={7} fill="#fff" stroke={color} strokeWidth={2.5} />
-      <circle cx={cx} cy={cy} r={3} fill={color} />
+      <title>{`${grant.name}: progress report due ${payload.month}`}</title>
+      <circle cx={cx} cy={cy} r={9} fill="#fff" stroke={color} strokeWidth={2} />
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={8}
+        fontWeight={700}
+        fill={color}
+      >
+        PR
+      </text>
     </g>
   )
 }

@@ -38,7 +38,7 @@ Events must be listed in chronological order — they are compiled in file order
 ### Event Types
 
 - **`grant_start`** — Create a grant with optional budget and report schedule.
-- **`grant_renew`** — Update grant metadata, set/adjust balance, and/or update report month. Use `amount: "1000"` (no sign) to reset balance to 1000, `amount: "+1000"` to add 1000, or `amount: "-1000"` to subtract 1000.
+- **`grant_renew`** — Update grant metadata, set/adjust balance, and/or update report month. Use `amount: "1000"` (no sign) to reset balance to 1000, `amount: "+1000"` to add 1000, or `amount: "-1000"` to subtract 1000. The adjustment applies at the start of the month; that month's salary and expense charges still apply.
 - **`grant_end`** — Mark grant as ended; terminates allocations after this month.
 - **`personnel_cover`** — Allocate a person's monthly effort (0–100%) to a grant over a date range. Use `capAtTotal: 100` to cap total effort across all grants.
 - **`personnel_salary_rate`** — Set a person's annual salary effective from this month.
